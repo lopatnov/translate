@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore translate.slnx
+
+      - name: Build
+        run: dotnet build translate.slnx -c Release --no-restore
+
+      - name: Unit tests
+        run: >
+          dotnet test translate.slnx
+          --configuration Release
+          --no-build
+          --filter "Category!=Integration"
+          --logger "trx;LogFileName=results.trx"
+          --results-directory ./test-results
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Tests
+          path: test-results/results.trx
+          reporter: dotnet-trx

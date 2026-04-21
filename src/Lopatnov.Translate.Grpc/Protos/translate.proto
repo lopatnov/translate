@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package lopatnov.translate.v1;
+
+option csharp_namespace = "Lopatnov.Translate.Grpc";
+
+service TranslateService {
+  rpc TranslateText (TranslateTextRequest) returns (TranslateTextResponse);
+  rpc TranscribeAudio (TranscribeAudioRequest) returns (TranscribeAudioResponse);
+  rpc SynthesizeSpeech (SynthesizeSpeechRequest) returns (SynthesizeSpeechResponse);
+  rpc TranslateAudio (TranslateAudioRequest) returns (TranslateAudioResponse);
+  rpc GetCapabilities (GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+}
+
+message TranslateTextRequest {
+  string text = 1;
+  string source_language = 2;
+  string target_language = 3;
+  string provider = 4;
+}
+
+message TranslateTextResponse {
+  string translated_text = 1;
+  string detected_language = 2;
+  string provider_used = 3;
+}
+
+message TranscribeAudioRequest {
+  bytes audio_data = 1;
+  string language = 2;
+  string audio_format = 3;
+}
+
+message TranscribeAudioResponse {
+  repeated TranscriptionSegment segments = 1;
+  string detected_language = 2;
+  string full_text = 3;
+}
+
+message TranscriptionSegment {
+  string text = 1;
+  float start_time = 2;
+  float end_time = 3;
+}
+
+message SynthesizeSpeechRequest {
+  string text = 1;
+  string language = 2;
+  string voice = 3;
+  float speed = 4;
+}
+
+message SynthesizeSpeechResponse {
+  bytes audio_data = 1;
+  int32 sample_rate = 2;
+}
+
+message TranslateAudioRequest {
+  bytes audio_data = 1;
+  string source_language = 2;
+  string target_language = 3;
+  string audio_format = 4;
+  string target_voice = 5;
+}
+
+message TranslateAudioResponse {
+  bytes translated_audio = 1;
+  string transcription = 2;
+  string translated_text = 3;
+  int32 sample_rate = 4;
+}
+
+message GetCapabilitiesRequest {}
+
+message GetCapabilitiesResponse {
+  repeated string supported_languages = 1;
+  repeated string available_voices = 2;
+  repeated string available_providers = 3;
+  bool stt_available = 4;
+  bool tts_available = 5;
+}

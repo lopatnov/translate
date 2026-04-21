@@ -1,0 +1,14 @@
+services:
+  translate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: lopatnov/translate:latest
+    ports:
+      - "5100:5100"
+    volumes:
+      - ../models:/app/models:ro
+    environment:
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - DOTNET_NOLOGO=1
+      - Models__Nllb__Path=/app/models/nllb

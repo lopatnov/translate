@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lopatnov.Translate.Core/Lopatnov.Translate.Core.csproj" />
+    <Project Path="src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj" />
+    <Project Path="src/Lopatnov.Translate.LibreTranslate/Lopatnov.Translate.LibreTranslate.csproj" />
+    <Project Path="src/Lopatnov.Translate.Nllb/Lopatnov.Translate.Nllb.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lopatnov.Translate.Core.Tests/Lopatnov.Translate.Core.Tests.csproj" />
+    <Project Path="tests/Lopatnov.Translate.Grpc.Tests/Lopatnov.Translate.Grpc.Tests.csproj" />
+    <Project Path="tests/Lopatnov.Translate.Nllb.Tests/Lopatnov.Translate.Nllb.Tests.csproj" />
+  </Folder>
+</Solution>
