@@ -12,13 +12,13 @@ Used as a backend by [Tereveni](https://github.com/lopatnov/tereveni) (messenger
 
 ## Status
 
-| Phase | Scope | Status |
-|-------|-------|--------|
-| 1 | Text → Text (NLLB-200) | **Done** |
-| 2 | Speech → Text (Whisper) | Planned |
-| 3 | Text → Speech (Piper) | Planned |
-| 4 | Speech → Speech (cascade) | Planned |
-| 5 | Docker, CI/CD | In Progress |
+| Phase | Scope                     | Status      |
+| ----- | ------------------------- | ----------- |
+| 1     | Text → Text (NLLB-200)    | **Done**    |
+| 2     | Speech → Text (Whisper)   | Planned     |
+| 3     | Text → Speech (Piper)     | Planned     |
+| 4     | Speech → Speech (cascade) | Planned     |
+| 5     | Docker, CI/CD             | In Progress |
 
 ---
 
@@ -59,14 +59,26 @@ Downloads INT8-quantized encoder + decoder from Hugging Face. Requires authentic
 
 ### Required files
 
-| File | Description |
-|------|-------------|
-| `encoder_model.onnx` (+ `.onnx.data`) | NLLB encoder |
-| `decoder_model.onnx` (+ `.onnx.data`) | NLLB decoder + LM head |
-| `sentencepiece.bpe.model` | SentencePiece tokenizer |
-| `tokenizer.json` | FLORES-200 language token IDs |
+After running either option above, `models/nllb/` should contain:
 
-All go into `models/nllb/`. Model weights are CC-BY-NC-4.0 (Meta AI).
+```text
+models/nllb/
+├── encoder_model.onnx
+├── encoder_model.onnx.data
+├── decoder_model.onnx
+├── decoder_model.onnx.data
+├── sentencepiece.bpe.model
+└── tokenizer.json
+```
+
+| File                                  | Description                   |
+| ------------------------------------- | ----------------------------- |
+| `encoder_model.onnx` (+ `.onnx.data`) | NLLB encoder                  |
+| `decoder_model.onnx` (+ `.onnx.data`) | NLLB decoder + LM head        |
+| `sentencepiece.bpe.model`             | SentencePiece tokenizer       |
+| `tokenizer.json`                      | FLORES-200 language token IDs |
+
+Model weights are CC-BY-NC-4.0 (Meta AI).
 
 ---
 
@@ -116,11 +128,11 @@ grpcurl -plaintext -d '{}' localhost:5100 lopatnov.translate.v1.TranslateService
 
 Override any setting via environment variable (double underscore = section nesting):
 
-| Variable | Default (local dev) | Default (Docker) | Description |
-|----------|---------------------|------------------|-------------|
-| `Models__Nllb__Path` | `../../models/nllb` | `/app/models/nllb` | NLLB ONNX files directory |
-| `Models__Nllb__MaxTokens` | `512` | `512` | Max output tokens per request |
-| `LibreTranslate__BaseUrl` | `http://localhost:5000` | `http://libretranslate:5000` | LibreTranslate fallback URL |
+| Variable                  | Default (local dev)     | Default (Docker)             | Description                   |
+| ------------------------- | ----------------------- | ---------------------------- | ----------------------------- |
+| `Models__Nllb__Path`      | `../../models/nllb`     | `/app/models/nllb`           | NLLB ONNX files directory     |
+| `Models__Nllb__MaxTokens` | `512`                   | `512`                        | Max output tokens per request |
+| `LibreTranslate__BaseUrl` | `http://localhost:5000` | `http://libretranslate:5000` | LibreTranslate fallback URL   |
 
 The local dev default (`../../models/nllb`) is set in `launchSettings.json` and resolves
 to `models/nllb/` at the solution root — relative to the app's content root
@@ -191,10 +203,10 @@ docker build -f docker/Dockerfile -t lopatnov/translate .
 
 ### Environment variables (Docker)
 
-| Variable | Default in container |
-|----------|---------------------|
-| `Models__Nllb__Path` | `/app/models/nllb` |
-| `ASPNETCORE_HTTP_PORTS` | `5100` |
+| Variable                | Default in container |
+| ----------------------- | -------------------- |
+| `Models__Nllb__Path`    | `/app/models/nllb`   |
+| `ASPNETCORE_HTTP_PORTS` | `5100`               |
 
 ---
 
@@ -238,13 +250,13 @@ Package: `lopatnov.translate.v1` · Port: `5100`
 
 Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](src/Lopatnov.Translate.Grpc/Protos/translate.proto)
 
-| RPC | Phase | Status |
-|-----|-------|--------|
-| `TranslateText` | 1 | Available |
-| `GetCapabilities` | 1 | Available |
-| `TranscribeAudio` | 2 | `UNIMPLEMENTED` |
-| `SynthesizeSpeech` | 3 | `UNIMPLEMENTED` |
-| `TranslateAudio` | 4 | `UNIMPLEMENTED` |
+| RPC                | Phase | Status          |
+| ------------------ | ----- | --------------- |
+| `TranslateText`    | 1     | Available       |
+| `GetCapabilities`  | 1     | Available       |
+| `TranscribeAudio`  | 2     | `UNIMPLEMENTED` |
+| `SynthesizeSpeech` | 3     | `UNIMPLEMENTED` |
+| `TranslateAudio`   | 4     | `UNIMPLEMENTED` |
 
 ### TranslateText request
 
