@@ -47,14 +47,19 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         var attentionMask = new long[inputIds.Length];
         Array.Fill(attentionMask, 1L);
 
-        var encoderOutputs = _encoderSession.Run([
-            NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(inputIds)),
-            NamedOnnxValue.CreateFromTensor("attention_mask", CreateLongTensor(attentionMask)),
-        ], ["last_hidden_state"]);
-
-        var encoderHiddenState = encoderOutputs
-            .First(o => o.Name == "last_hidden_state")
-            .AsTensor<float>();
+        // Encoder: copy hidden state into managed memory — it must survive across all decode steps.
+        DenseTensor<float>? encoderHiddenState = null;
+        _encoderSession.Run(
+            [
+                NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(inputIds)),
+                NamedOnnxValue.CreateFromTensor("attention_mask", CreateLongTensor(attentionMask)),
+            ],
+            ["last_hidden_state"],
+            outputs =>
+            {
+                var t = outputs.First(o => o.Name == "last_hidden_state").AsTensor<float>();
+                encoderHiddenState = new DenseTensor<float>(t.ToArray(), t.Dimensions.ToArray());
+            });
 
         var targetLangId = _tokenizer.GetLanguageTokenId(targetLanguage);
 
@@ -69,17 +74,19 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var decoderOutputs = _decoderSession.Run([
-                NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
-                NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState),
-                NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
-            ], ["logits"]);
-
-            var logits = decoderOutputs
-                .First(o => o.Name == "logits")
-                .AsTensor<float>();
-
-            var nextToken = Argmax(logits, decoderCount - 1);
+            // Decoder: run Argmax directly on the native logits tensor — no managed copy.
+            // Native memory is freed by the adapter as soon as this callback returns.
+            var nextToken = NllbTokenizer.EosTokenId;
+            _decoderSession.Run(
+                [
+                    NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
+                    NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState!),
+                    NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
+                ],
+                ["logits"],
+                outputs => nextToken = Argmax(
+                    outputs.First(o => o.Name == "logits").AsTensor<float>(),
+                    decoderCount - 1));
 
             if (nextToken == NllbTokenizer.EosTokenId)
                 break;

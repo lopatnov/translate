@@ -14,29 +14,35 @@ public sealed class NllbTranslatorTests
         var encoderMock = new Mock<IOnnxSession>();
         var decoderMock = new Mock<IOnnxSession>();
 
-        // Encoder returns a minimal hidden state: [1, seqLen, 4]
+        // Encoder: provide a minimal hidden state [1, seqLen, 4] via the callback.
         encoderMock
-            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(), It.IsAny<IReadOnlyCollection<string>?>()))
-            .Returns<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?>((inputs, _) =>
-            {
-                var inputIds = inputs.First(i => i.Name == "input_ids").AsTensor<long>();
-                var seqLen = inputIds.Dimensions[1];
-                var hiddenState = new DenseTensor<float>(new float[1 * seqLen * 4], new[] { 1, seqLen, 4 });
-                return new[] { NamedOnnxValue.CreateFromTensor("last_hidden_state", hiddenState) };
-            });
+            .Setup(s => s.Run(
+                It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(),
+                It.IsAny<IReadOnlyCollection<string>?>(),
+                It.IsAny<Action<IEnumerable<NamedOnnxValue>>>()))
+            .Callback<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?, Action<IEnumerable<NamedOnnxValue>>>(
+                (inputs, _, process) =>
+                {
+                    var seqLen = inputs.First(i => i.Name == "input_ids").AsTensor<long>().Dimensions[1];
+                    var hiddenState = new DenseTensor<float>(new float[seqLen * 4], new[] { 1, seqLen, 4 });
+                    process([NamedOnnxValue.CreateFromTensor("last_hidden_state", hiddenState)]);
+                });
 
-        // Decoder returns EOS at the last position to stop the loop immediately.
-        // Shape mirrors the actual decoder: [1, seqLen, vocabSize].
+        // Decoder: return EOS at the last position to stop the loop on the first step.
         decoderMock
-            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(), It.IsAny<IReadOnlyCollection<string>?>()))
-            .Returns<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?>((inputs, _) =>
-            {
-                var seqLen = inputs.First(i => i.Name == "input_ids").AsTensor<long>().Dimensions[1];
-                var vocabSize = 10;
-                var logits = new DenseTensor<float>(new float[seqLen * vocabSize], new[] { 1, seqLen, vocabSize });
-                logits[0, seqLen - 1, (int)NllbTokenizer.EosTokenId] = 100f;
-                return new[] { NamedOnnxValue.CreateFromTensor("logits", logits) };
-            });
+            .Setup(s => s.Run(
+                It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(),
+                It.IsAny<IReadOnlyCollection<string>?>(),
+                It.IsAny<Action<IEnumerable<NamedOnnxValue>>>()))
+            .Callback<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?, Action<IEnumerable<NamedOnnxValue>>>(
+                (inputs, _, process) =>
+                {
+                    var seqLen = inputs.First(i => i.Name == "input_ids").AsTensor<long>().Dimensions[1];
+                    const int vocabSize = 10;
+                    var logits = new DenseTensor<float>(new float[seqLen * vocabSize], new[] { 1, seqLen, vocabSize });
+                    logits[0, seqLen - 1, (int)NllbTokenizer.EosTokenId] = 100f;
+                    process([NamedOnnxValue.CreateFromTensor("logits", logits)]);
+                });
 
         var options = new NllbOptions { MaxTokens = 10 };
         using var translator = new NllbTranslator(options, new FakeNllbTokenizer(), encoderMock.Object, decoderMock.Object);
@@ -47,6 +53,7 @@ public sealed class NllbTranslatorTests
             It.Is<IReadOnlyCollection<NamedOnnxValue>>(
                 inputs => inputs.Any(i => i.Name == "input_ids") &&
                           inputs.Any(i => i.Name == "attention_mask")),
-            It.IsAny<IReadOnlyCollection<string>?>()), Times.Once);
+            It.IsAny<IReadOnlyCollection<string>?>(),
+            It.IsAny<Action<IEnumerable<NamedOnnxValue>>>()), Times.Once);
     }
 }

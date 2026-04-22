@@ -9,6 +9,9 @@ public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
 
     private static string ResolveModelPath()
     {
+        // Production resolves NllbOptions.Path relative to the app's content root.
+        // Tests run from bin/Release/net10.0/, so we traverse up to find the solution
+        // root (translate.slnx) and mirror the production default of "models/nllb".
         var envPath = Environment.GetEnvironmentVariable("Models__Nllb__Path");
         if (!string.IsNullOrEmpty(envPath))
             return envPath;
