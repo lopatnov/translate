@@ -72,7 +72,7 @@ jobs:
         run: |
           if git ls-remote --exit-code origin "${{ github.base_ref }}" > /dev/null 2>&1; then
             git fetch origin "${{ github.base_ref }}"
-            buf breaking --against ".git#branch=${{ github.base_ref }}"
+            buf breaking --against ".git#ref=FETCH_HEAD"
           else
             echo "Base branch '${{ github.base_ref }}' has no commits yet — skipping breaking check"
           fi
