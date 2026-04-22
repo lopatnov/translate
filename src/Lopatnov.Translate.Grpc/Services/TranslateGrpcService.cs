@@ -1,4 +1,5 @@
 using Grpc.Core;
+using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
 
 namespace Lopatnov.Translate.Grpc.Services;
@@ -13,7 +14,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var providerKey = string.IsNullOrWhiteSpace(request.Provider) ? "nllb" : request.Provider;
+        var providerKey = string.IsNullOrWhiteSpace(request.Provider) ? "nllb" : request.Provider.Trim();
         var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
             ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
 
@@ -40,8 +41,9 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         };
         response.AvailableProviders.AddRange(["nllb", "libretranslate"]);
         response.SupportedLanguages.AddRange([
-            "eng_Latn", "ukr_Cyrl", "rus_Cyrl", "deu_Latn",
-            "fra_Latn", "spa_Latn", "pol_Latn", "zho_Hans",
+            Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
+            Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
+            Language.JapaneseJpan,   Language.ArabicArab,
         ]);
         return Task.FromResult(response);
     }

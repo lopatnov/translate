@@ -23,6 +23,8 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     {
         if (options.BeamSize > 1)
             throw new NotSupportedException($"BeamSize > 1 is not implemented; only greedy decoding (BeamSize = 1) is supported.");
+        if (options.MaxTokens <= 0)
+            throw new ArgumentException($"MaxTokens must be > 0, got {options.MaxTokens}.", nameof(options));
 
         _options = options;
         _ownsTokenizer = tokenizer is null;

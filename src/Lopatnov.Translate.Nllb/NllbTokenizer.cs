@@ -63,10 +63,14 @@ public sealed class NllbTokenizer : INllbTokenizer
         if (!File.Exists(configPath))
             return BuiltInLanguageTokenIds;
 
-        // Let parse errors propagate — a malformed tokenizer.json would silently
-        // produce wrong language IDs and very hard-to-debug translation failures.
+        // Parse errors propagate intentionally — a malformed tokenizer.json would produce
+        // silently wrong language IDs and extremely hard-to-debug translation failures.
         var parsed = ParseTokenizerJson(configPath);
-        return parsed.Count > 0 ? parsed : BuiltInLanguageTokenIds;
+        if (parsed.Count == 0)
+            throw new InvalidOperationException(
+                $"'{configPath}' exists but contains no FLORES-200 language token entries. " +
+                "Delete the file to use built-in IDs, or verify its 'added_tokens' array.");
+        return parsed;
     }
 
     private static IReadOnlyDictionary<string, long> ParseTokenizerJson(string path)
