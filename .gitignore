@@ -1,5 +1,5 @@
 ## Models (large binaries, separate licenses — never commit)
-models/
+/models/
 
 ## A streamlined .gitignore for modern .NET projects
 ## including temporary files, build results, and
