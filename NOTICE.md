@@ -21,7 +21,7 @@ Their licenses and attribution notices are reproduced below.
 **License:** Apache License, Version 2.0
 
 We gratefully acknowledge Forkjoin.ai for making the NLLB-200 model available
-in ONNX format, optimised for edge and on-device inference. Their work
+in ONNX format, optimized for edge and on-device inference. Their work
 significantly reduced the barrier to self-hosted, privacy-respecting translation
 and made this project possible.
 
@@ -51,7 +51,8 @@ obtained separately in accordance with the CC BY-NC 4.0 license terms.
 **Non-commercial use only.**
 
 Citation:
-```
+
+```bibtex
 @article{nllb2022,
   title     = {No Language Left Behind: Scaling Human-Centered Machine Translation},
   author    = {NLLB Team et al.},

@@ -38,11 +38,13 @@ python scripts/export_nllb.py
 Exports `facebook/nllb-200-distilled-600M` from the HuggingFace cache (downloads ~2.5 GB on first run) into `models/nllb/` as float32 ONNX models.
 
 For the 1.3B variant:
+
 ```bash
 python scripts/export_nllb.py --model facebook/nllb-200-distilled-1.3B --output ./models/nllb
 ```
 
 After export, download the tokenizer files:
+
 ```powershell
 .\scripts\download-models.ps1   # downloads sentencepiece.bpe.model, tokenizer.json, etc.
 ```
@@ -128,23 +130,66 @@ to `models/nllb/` at the solution root — relative to the app's content root
 
 ## Deployment
 
-### Docker Compose
+### Option A. Pre-built image (GHCR)
+
+Published images are available at `ghcr.io/lopatnov/translate`. **Model files are not bundled** — they must be downloaded separately and mounted as a volume.
+
+**Step 1 — download models** to a local directory (one-time):
+
+```powershell
+.\scripts\download-models.ps1
+```
+
+This populates `models/nllb/` under the current directory with the NLLB tokenizer and ONNX weights.
+
+**Step 2 — run with Docker Compose** (recommended):
+
+Create a `docker-compose.yml` next to your `models/` directory:
+
+```yaml
+services:
+  translate:
+    image: ghcr.io/lopatnov/translate:latest
+    ports:
+      - "5100:5100"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      - Models__Nllb__Path=/app/models/nllb
+```
+
+Then:
+
+```bash
+docker compose up
+```
+
+**Or run directly with `docker run`:**
+
+```bash
+docker run -p 5100:5100 \
+  -v ./models:/app/models:ro \
+  -e Models__Nllb__Path=/app/models/nllb \
+  ghcr.io/lopatnov/translate:latest
+```
+
+Available tags: `latest`, semver (e.g. `1.2.3`, `1.2`), and short SHA (e.g. `abc1234`).
+
+---
+
+### Option B. Build from source
 
 ```bash
 docker compose -f docker/docker-compose.yml up
 ```
 
-This builds the image, starts the container, and mounts `models/` as read-only. The service is exposed on port **5100**.
-
-### Build image only
+Builds the image from the local `docker/Dockerfile` and mounts `models/` from the repository root. Useful during development.
 
 ```bash
 docker build -f docker/Dockerfile -t lopatnov/translate .
 ```
 
 ### Environment variables (Docker)
-
-Pass them in `docker-compose.yml` under `environment:` or in a `.env` file next to the compose file.
 
 | Variable | Default in container |
 |----------|---------------------|
