@@ -11,9 +11,17 @@ public sealed class OnnxSessionAdapter : IOnnxSession
     public OnnxSessionAdapter(string modelPath)
         => _session = new InferenceSession(modelPath);
 
-    public IReadOnlyList<NamedOnnxValue> Run(IReadOnlyCollection<NamedOnnxValue> inputs)
+    public IReadOnlyList<NamedOnnxValue> Run(
+        IReadOnlyCollection<NamedOnnxValue> inputs,
+        IReadOnlyCollection<string>? outputNames = null)
     {
-        using var results = _session.Run(inputs);
+        // Pass outputNames to the runtime so it can skip computing unused outputs.
+        // Copy only the requested tensors to avoid allocating the full output set on
+        // every decoder step (the hot path needs only "logits", not all outputs).
+        using var results = outputNames is null
+            ? _session.Run(inputs)
+            : _session.Run(inputs, outputNames);
+
         return results.Select(CopyResult).ToList();
     }
 

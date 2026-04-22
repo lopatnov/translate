@@ -50,7 +50,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         var encoderOutputs = _encoderSession.Run([
             NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(inputIds)),
             NamedOnnxValue.CreateFromTensor("attention_mask", CreateLongTensor(attentionMask)),
-        ]);
+        ], ["last_hidden_state"]);
 
         var encoderHiddenState = encoderOutputs
             .First(o => o.Name == "last_hidden_state")
@@ -73,7 +73,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
                 NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
                 NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState),
                 NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
-            ]);
+            ], ["logits"]);
 
             var logits = decoderOutputs
                 .First(o => o.Name == "logits")

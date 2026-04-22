@@ -16,8 +16,8 @@ public sealed class NllbTranslatorTests
 
         // Encoder returns a minimal hidden state: [1, seqLen, 4]
         encoderMock
-            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>()))
-            .Returns<IReadOnlyCollection<NamedOnnxValue>>(inputs =>
+            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(), It.IsAny<IReadOnlyCollection<string>?>()))
+            .Returns<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?>((inputs, _) =>
             {
                 var inputIds = inputs.First(i => i.Name == "input_ids").AsTensor<long>();
                 var seqLen = inputIds.Dimensions[1];
@@ -28,8 +28,8 @@ public sealed class NllbTranslatorTests
         // Decoder returns EOS at the last position to stop the loop immediately.
         // Shape mirrors the actual decoder: [1, seqLen, vocabSize].
         decoderMock
-            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>()))
-            .Returns<IReadOnlyCollection<NamedOnnxValue>>(inputs =>
+            .Setup(s => s.Run(It.IsAny<IReadOnlyCollection<NamedOnnxValue>>(), It.IsAny<IReadOnlyCollection<string>?>()))
+            .Returns<IReadOnlyCollection<NamedOnnxValue>, IReadOnlyCollection<string>?>((inputs, _) =>
             {
                 var seqLen = inputs.First(i => i.Name == "input_ids").AsTensor<long>().Dimensions[1];
                 var vocabSize = 10;
@@ -43,8 +43,10 @@ public sealed class NllbTranslatorTests
 
         await translator.TranslateAsync("hello", "eng_Latn", "ukr_Cyrl");
 
-        encoderMock.Verify(s => s.Run(It.Is<IReadOnlyCollection<NamedOnnxValue>>(
-            inputs => inputs.Any(i => i.Name == "input_ids") &&
-                      inputs.Any(i => i.Name == "attention_mask"))), Times.Once);
+        encoderMock.Verify(s => s.Run(
+            It.Is<IReadOnlyCollection<NamedOnnxValue>>(
+                inputs => inputs.Any(i => i.Name == "input_ids") &&
+                          inputs.Any(i => i.Name == "attention_mask")),
+            It.IsAny<IReadOnlyCollection<string>?>()), Times.Once);
     }
 }
