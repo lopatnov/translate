@@ -10,7 +10,10 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
 builder.Services.Configure<NllbOptions>(builder.Configuration.GetSection("Models:Nllb"));
-builder.Services.Configure<LibreTranslateOptions>(builder.Configuration.GetSection("LibreTranslate"));
+builder.Services.AddOptions<LibreTranslateOptions>()
+    .Bind(builder.Configuration.GetSection("LibreTranslate"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddKeyedSingleton<ITextTranslator, NllbTranslator>("nllb", (sp, _) =>
     new NllbTranslator(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<NllbOptions>>()));

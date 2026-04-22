@@ -1,7 +1,9 @@
+using Xunit.Abstractions;
+
 namespace Lopatnov.Translate.Nllb.Tests;
 
 [Trait("Category", "Integration")]
-public sealed class NllbTranslatorIntegrationTests
+public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
 {
     private static readonly string ModelPath = ResolveModelPath();
 
@@ -31,18 +33,18 @@ public sealed class NllbTranslatorIntegrationTests
         { "Спасибо за внимание.",       "rus_Cyrl", "eng_Latn", ["thank", "attention"] },
     };
 
-    [Theory]
+    [SkippableTheory]
     [MemberData(nameof(TranslationCases))]
     public async Task TranslateAsync_ProducesExpectedEnglishOutput(
         string source, string srcLang, string tgtLang, string[] expectedKeywords)
     {
-        if (!Directory.Exists(ModelPath))
-            return;
+        Skip.If(!Directory.Exists(ModelPath), $"NLLB model not found at '{ModelPath}'. Run scripts/download-models.ps1.");
 
         var options = new NllbOptions { Path = ModelPath, MaxTokens = 128, BeamSize = 1 };
         using var translator = new NllbTranslator(options, null, null, null);
 
         var result = await translator.TranslateAsync(source, srcLang, tgtLang);
+        output.WriteLine($"{source} → {result}");
 
         Assert.False(string.IsNullOrWhiteSpace(result), $"Empty translation for: {source}");
 

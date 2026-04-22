@@ -12,3 +12,15 @@ services:
       - DOTNET_CLI_TELEMETRY_OPTOUT=1
       - DOTNET_NOLOGO=1
       - Models__Nllb__Path=/app/models/nllb
+      - LibreTranslate__BaseUrl=http://libretranslate:5000
+    depends_on:
+      - libretranslate
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    ports:
+      - "5000:5000"
+    environment:
+      # Load only the languages declared in Language.cs to reduce startup time and memory.
+      - LT_LOAD_ONLY=en,uk,ru,de,fr,es,pl,zh,ja,ar
+    restart: unless-stopped
