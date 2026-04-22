@@ -27,49 +27,57 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        return Task.Run(() => Translate(text, sourceLanguage, targetLanguage, cancellationToken), cancellationToken);
+    }
 
+    private string Translate(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken)
+    {
         var inputIds = _tokenizer.Encode(text, sourceLanguage);
-        var attentionMask = Enumerable.Repeat(1L, inputIds.Length).ToArray();
+        var attentionMask = new long[inputIds.Length];
+        Array.Fill(attentionMask, 1L);
 
-        var encoderOutputs = _encoderSession.Run(new[]
-        {
+        var encoderOutputs = _encoderSession.Run([
             NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(inputIds)),
             NamedOnnxValue.CreateFromTensor("attention_mask", CreateLongTensor(attentionMask)),
-        });
+        ]);
 
         var encoderHiddenState = encoderOutputs
             .First(o => o.Name == "last_hidden_state")
             .AsTensor<float>();
 
         var targetLangId = _tokenizer.GetLanguageTokenId(targetLanguage);
-        // NLLB decoder_start_token_id=2 (</s>), followed by forced target-language BOS
-        var decoderIds = new List<long> { NllbTokenizer.EosTokenId, targetLangId };
+
+        // Pre-allocate full decoder buffer to avoid per-step array allocations.
+        // Layout: [EOS, tgt_lang_id, ...generated tokens...]
+        var decoderBuf = new long[_options.MaxTokens + 2];
+        decoderBuf[0] = NllbTokenizer.EosTokenId;
+        decoderBuf[1] = targetLangId;
+        var decoderCount = 2;
 
         for (var step = 0; step < _options.MaxTokens; step++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var decoderOutputs = _decoderSession.Run(new[]
-            {
-                NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderIds.ToArray())),
+            var decoderOutputs = _decoderSession.Run([
+                NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
                 NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState),
                 NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
-            });
+            ]);
 
             var logits = decoderOutputs
                 .First(o => o.Name == "logits")
                 .AsTensor<float>();
 
-            var nextToken = Argmax(logits, decoderIds.Count - 1);
+            var nextToken = Argmax(logits, decoderCount - 1);
 
             if (nextToken == NllbTokenizer.EosTokenId)
                 break;
 
-            decoderIds.Add(nextToken);
+            decoderBuf[decoderCount++] = nextToken;
         }
 
-        // Skip decoder_start_token (2) and forced target-lang BOS
-        return Task.FromResult(_tokenizer.Decode(decoderIds.Skip(2)));
+        // Skip decoder_start_token (EOS) and forced target-lang BOS
+        return _tokenizer.Decode(new ArraySegment<long>(decoderBuf, 2, decoderCount - 2));
     }
 
     public void Dispose()
@@ -82,20 +90,29 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     private static DenseTensor<long> CreateLongTensor(long[] data)
         => new(data, new[] { 1, data.Length });
 
+    private static DenseTensor<long> CreateLongTensor(long[] data, int length)
+        => new(new Memory<long>(data, 0, length), new[] { 1, length });
+
     private static long Argmax(Tensor<float> logits, int position)
     {
         var vocabSize = logits.Dimensions[2];
+
+        if (logits is DenseTensor<float> dense)
+        {
+            var span = dense.Buffer.Span.Slice(position * vocabSize, vocabSize);
+            var maxIdx = 0;
+            for (var v = 1; v < span.Length; v++)
+                if (span[v] > span[maxIdx]) maxIdx = v;
+            return maxIdx;
+        }
+
         var maxVal = float.NegativeInfinity;
-        var maxIdx = 0L;
+        var maxIdxFallback = 0L;
         for (var v = 0; v < vocabSize; v++)
         {
             var val = logits[0, position, v];
-            if (val > maxVal)
-            {
-                maxVal = val;
-                maxIdx = v;
-            }
+            if (val > maxVal) { maxVal = val; maxIdxFallback = v; }
         }
-        return maxIdx;
+        return maxIdxFallback;
     }
 }

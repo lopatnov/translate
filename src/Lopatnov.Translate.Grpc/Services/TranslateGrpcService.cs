@@ -14,7 +14,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         TranslateTextRequest request, ServerCallContext context)
     {
         var providerKey = string.IsNullOrWhiteSpace(request.Provider) ? "nllb" : request.Provider;
-        var translator = _services.GetRequiredKeyedService<ITextTranslator>(providerKey);
+        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
+            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
 
         var translated = await translator.TranslateAsync(
             request.Text,
