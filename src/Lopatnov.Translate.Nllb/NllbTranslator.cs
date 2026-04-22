@@ -77,7 +77,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
 
             // Decoder: run Argmax directly on the native logits tensor — no managed copy.
             // Native memory is freed by the adapter as soon as this callback returns.
-            var nextToken = NllbTokenizer.EosTokenId;
+            var nextToken = -1L;
             _decoderSession.Run(
                 [
                     NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
