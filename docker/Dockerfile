@@ -14,6 +14,10 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
+RUN adduser --disabled-password --gecos "" --home /nonexistent --no-create-home appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 ENV ASPNETCORE_HTTP_PORTS=5100
 EXPOSE 5100
 

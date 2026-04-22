@@ -43,9 +43,9 @@ if (-not (Get-Command huggingface-cli -ErrorAction SilentlyContinue)) {
     Write-Error "huggingface-cli not found. Install with: pip install 'huggingface_hub[cli]'"
 }
 
+# ONNX model files are not downloaded here — use scripts/export_nllb.py instead.
+# The quantized forkjoin models require authentication and produce lower-quality output.
 $files = @(
-    "encoder_model_quantized.onnx",
-    "decoder_model_quantized.onnx",
     "sentencepiece.bpe.model",
     "tokenizer.json",
     "tokenizer_config.json",

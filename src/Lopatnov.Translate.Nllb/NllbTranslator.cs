@@ -12,15 +12,24 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     private readonly INllbTokenizer _tokenizer;
     private readonly IOnnxSession _encoderSession;
     private readonly IOnnxSession _decoderSession;
+    private readonly bool _ownsTokenizer;
+    private readonly bool _ownsEncoder;
+    private readonly bool _ownsDecoder;
 
     public NllbTranslator(IOptions<NllbOptions> options)
         : this(options.Value, null, null, null) { }
 
     public NllbTranslator(NllbOptions options, INllbTokenizer? tokenizer, IOnnxSession? encoderSession, IOnnxSession? decoderSession)
     {
+        if (options.BeamSize > 1)
+            throw new NotSupportedException($"BeamSize > 1 is not implemented; only greedy decoding (BeamSize = 1) is supported.");
+
         _options = options;
+        _ownsTokenizer = tokenizer is null;
         _tokenizer = tokenizer ?? new NllbTokenizer(options.Path, options.TokenizerFile, options.TokenizerConfigFile);
+        _ownsEncoder = encoderSession is null;
         _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile));
+        _ownsDecoder = decoderSession is null;
         _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile));
     }
 
@@ -82,9 +91,9 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
 
     public void Dispose()
     {
-        _tokenizer.Dispose();
-        _encoderSession.Dispose();
-        _decoderSession.Dispose();
+        if (_ownsTokenizer) _tokenizer.Dispose();
+        if (_ownsEncoder) _encoderSession.Dispose();
+        if (_ownsDecoder) _decoderSession.Dispose();
     }
 
     private static DenseTensor<long> CreateLongTensor(long[] data)

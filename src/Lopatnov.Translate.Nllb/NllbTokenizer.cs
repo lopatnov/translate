@@ -60,17 +60,13 @@ public sealed class NllbTokenizer : INllbTokenizer
 
     private static IReadOnlyDictionary<string, long> LoadLanguageTokenIds(string configPath)
     {
-        if (File.Exists(configPath))
-        {
-            try
-            {
-                var parsed = ParseTokenizerJson(configPath);
-                if (parsed.Count > 0)
-                    return parsed;
-            }
-            catch { /* fall through */ }
-        }
-        return BuiltInLanguageTokenIds;
+        if (!File.Exists(configPath))
+            return BuiltInLanguageTokenIds;
+
+        // Let parse errors propagate — a malformed tokenizer.json would silently
+        // produce wrong language IDs and very hard-to-debug translation failures.
+        var parsed = ParseTokenizerJson(configPath);
+        return parsed.Count > 0 ? parsed : BuiltInLanguageTokenIds;
     }
 
     private static IReadOnlyDictionary<string, long> ParseTokenizerJson(string path)

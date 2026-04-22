@@ -10,6 +10,6 @@ public static class Language
     public const string SpanishLatin = "spa_Latn";
     public const string PolishLatin = "pol_Latn";
     public const string ChineseSimplified = "zho_Hans";
-    public const string JapaneseLatin = "jpn_Jpan";
+    public const string JapaneseJpan = "jpn_Jpan";
     public const string ArabicArab = "arb_Arab";
 }
