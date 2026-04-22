@@ -70,6 +70,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         decoderBuf[1] = targetLangId;
         var decoderCount = 2;
 
+        // CancellationToken is only checked between decode steps; ONNX calls are not interruptible mid-run.
         for (var step = 0; step < _options.MaxTokens; step++)
         {
             cancellationToken.ThrowIfCancellationRequested();

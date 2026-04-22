@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Lopatnov.Translate.Core.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -13,7 +14,6 @@ public sealed class LibreTranslateClient : ITextTranslator
     {
         _http = http;
         _options = options.Value;
-        _http.BaseAddress = new Uri(_options.BaseUrl);
     }
 
     public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
@@ -77,5 +77,5 @@ public sealed class LibreTranslateClient : ITextTranslator
             ["est_Latn"] = "et",
         };
 
-    private sealed record LibreTranslateResponse(string TranslatedText);
+    private sealed record LibreTranslateResponse([property: JsonPropertyName("translatedText")] string TranslatedText);
 }

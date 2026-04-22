@@ -15,6 +15,7 @@ services:
       - LibreTranslate__BaseUrl=http://libretranslate:5000
     depends_on:
       - libretranslate
+    restart: unless-stopped
 
   libretranslate:
     image: libretranslate/libretranslate:latest
