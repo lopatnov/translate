@@ -18,7 +18,7 @@ Used as a backend by [Tereveni](https://github.com/lopatnov/tereveni) (messenger
 | 2 | Speech → Text (Whisper) | Planned |
 | 3 | Text → Speech (Piper) | Planned |
 | 4 | Speech → Speech (cascade) | Planned |
-| 5 | Docker, CI/CD | Planned |
+| 5 | Docker, CI/CD | In Progress |
 
 ---
 
@@ -120,7 +120,7 @@ Override any setting via environment variable (double underscore = section nesti
 |----------|---------------------|------------------|-------------|
 | `Models__Nllb__Path` | `../../models/nllb` | `/app/models/nllb` | NLLB ONNX files directory |
 | `Models__Nllb__MaxTokens` | `512` | `512` | Max output tokens per request |
-| `LibreTranslate__BaseUrl` | `http://localhost:5000` | `http://localhost:5000` | LibreTranslate fallback URL |
+| `LibreTranslate__BaseUrl` | `http://localhost:5000` | `http://libretranslate:5000` | LibreTranslate fallback URL |
 
 The local dev default (`../../models/nllb`) is set in `launchSettings.json` and resolves
 to `models/nllb/` at the solution root — relative to the app's content root
@@ -206,7 +206,7 @@ docker build -f docker/Dockerfile -t lopatnov/translate .
 dotnet test --filter "Category!=Integration"
 ```
 
-Runs all unit tests (~6 tests, no model files required). Tests cover:
+Runs all unit tests (no model files required). Tests cover:
 
 - `NllbTokenizer` — FLORES-200 token formatting and encode/decode round-trip
 - `NllbTranslator` — ONNX session calls verified with mocks
@@ -220,11 +220,13 @@ Require model files in `models/nllb/`.
 dotnet test --filter "Category=Integration"
 ```
 
-Translates 3 Ukrainian→English reference sentences through the real ONNX models:
+Translates Ukrainian→English and Russian→English reference sentences through the real ONNX models:
 
 - `Привіт, як справи?`
 - `Сьогодні гарна погода.`
 - `Дякую за вашу допомогу.`
+- `Добрый день, чем могу помочь?`
+- `Спасибо за внимание.`
 
 The path to models is resolved automatically from the solution root. Override with `Models__Nllb__Path` if needed.
 
@@ -257,7 +259,7 @@ message TranslateTextRequest {
 
 ### Supported languages
 
-`eng_Latn` · `ukr_Cyrl` · `rus_Cyrl` · `deu_Latn` · `fra_Latn` · `spa_Latn` · `pol_Latn` · `zho_Hans`
+`eng_Latn` · `ukr_Cyrl` · `rus_Cyrl` · `deu_Latn` · `fra_Latn` · `spa_Latn` · `pol_Latn` · `zho_Hans` · `jpn_Jpan` · `arb_Arab`
 
 Full list via `GetCapabilities`. Uses [FLORES-200](https://github.com/facebookresearch/flores) codes.
 
