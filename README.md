@@ -128,6 +128,17 @@ grpcurl -plaintext -d '{
 }' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
 ```
 
+Incremental translation — reuse existing, translate only new keys:
+
+```bash
+grpcurl -plaintext -d '{
+  "json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}",
+  "source_language": "eng_Latn",
+  "target_language": "ukr_Cyrl",
+  "existing_translation": "{\"auth\":{\"signIn\":\"Увійти\"}}"
+}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+```
+
 Query capabilities:
 
 ```bash
@@ -287,10 +298,12 @@ Non-string values (numbers, booleans, null) and blank strings are passed through
 
 ```protobuf
 message TranslateLocalizationRequest {
-  string json = 1;             // JSON object, e.g. i18n / l10n file content
-  string source_language = 2;  // FLORES-200 code, e.g. "eng_Latn"
-  string target_language = 3;  // FLORES-200 code, e.g. "ukr_Cyrl"
-  string provider = 4;         // "nllb" | "libretranslate" | "" → defaults to "nllb"
+  string json = 1;                  // JSON object, e.g. i18n / l10n file content
+  string source_language = 2;       // FLORES-200 code, e.g. "eng_Latn"
+  string target_language = 3;       // FLORES-200 code, e.g. "ukr_Cyrl"
+  string provider = 4;              // "nllb" | "libretranslate" | "" → defaults to "nllb"
+  string existing_translation = 5;  // optional: same-structure JSON; matching non-blank values are reused as-is (incremental translation)
+  string context = 6;               // optional: same-structure JSON with per-key hints (reserved for LLM-based providers)
 }
 
 message TranslateLocalizationResponse {

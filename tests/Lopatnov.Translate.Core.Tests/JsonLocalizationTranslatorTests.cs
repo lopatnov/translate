@@ -171,4 +171,95 @@ public sealed class JsonLocalizationTranslatorTests
 
         Assert.Equal(cts.Token, capturedToken);
     }
+
+    // --- existing_translation ---
+
+    [Fact]
+    public async Task TranslateAsync_ExistingTranslation_ReusesMatchingKeys()
+    {
+        var input = """{"signIn":"Sign in","password":"Password"}""";
+        var existing = """{"signIn":"Увійти"}""";
+        var translator = Translator();
+
+        var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+
+        var doc = JsonDocument.Parse(json);
+        Assert.Equal("Увійти", doc.RootElement.GetProperty("signIn").GetString());
+        Assert.Equal("[Password]", doc.RootElement.GetProperty("password").GetString());
+        Assert.Equal(1, count);
+
+        translator.Verify(
+            t => t.TranslateAsync("Sign in", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        translator.Verify(
+            t => t.TranslateAsync("Password", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ExistingTranslation_BlankValueStillTranslates()
+    {
+        var input = """{"key":"Hello"}""";
+        var existing = """{"key":"   "}""";
+        var translator = Translator();
+
+        var (_, count) = await JsonLocalizationTranslator.TranslateAsync(
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+
+        Assert.Equal(1, count);
+        translator.Verify(
+            t => t.TranslateAsync("Hello", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ExistingTranslation_NestedKeysReused()
+    {
+        var input = """{"auth":{"a":{"b":{"c":"Deep"}},"login":"Login"}}""";
+        var existing = """{"auth":{"a":{"b":{"c":"Глибоко"}}}}""";
+        var translator = Translator();
+
+        var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+
+        var doc = JsonDocument.Parse(json);
+        Assert.Equal("Глибоко", doc.RootElement
+            .GetProperty("auth").GetProperty("a").GetProperty("b").GetProperty("c").GetString());
+        Assert.Equal("[Login]", doc.RootElement.GetProperty("auth").GetProperty("login").GetString());
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ExistingTranslation_ArrayItemsReused()
+    {
+        var input = """{"items":["apple","banana","cherry"]}""";
+        var existing = """{"items":["яблуко",""]}""";
+        var translator = Translator();
+
+        var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+
+        var doc = JsonDocument.Parse(json);
+        var items = doc.RootElement.GetProperty("items");
+        Assert.Equal("яблуко", items[0].GetString());
+        Assert.Equal("[banana]", items[1].GetString());
+        Assert.Equal("[cherry]", items[2].GetString());
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_Context_AcceptedWithoutError()
+    {
+        var input = """{"signIn":"Sign in"}""";
+        var context = """{"signIn":"Button that signs the user into the application"}""";
+        var translator = Translator();
+
+        var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", context: context);
+
+        var doc = JsonDocument.Parse(json);
+        Assert.Equal("[Sign in]", doc.RootElement.GetProperty("signIn").GetString());
+        Assert.Equal(1, count);
+    }
 }

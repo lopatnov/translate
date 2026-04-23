@@ -31,6 +31,8 @@ message TranslateLocalizationRequest {
   string source_language = 2;
   string target_language = 3;
   string provider = 4;
+  string existing_translation = 5;  // optional: same-structure JSON with already-translated values; matching keys are reused as-is
+  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based providers)
 }
 
 message TranslateLocalizationResponse {
