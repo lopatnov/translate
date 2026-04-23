@@ -1,0 +1,10 @@
+**/.git
+**/.vscode
+**/.claude
+**/bin
+**/obj
+models/
+.env
+.env.*
+secrets/
+*.user

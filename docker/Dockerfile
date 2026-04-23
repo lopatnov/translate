@@ -5,7 +5,6 @@ COPY translate.slnx .
 COPY src/ src/
 RUN dotnet restore src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj
 
-COPY . .
 RUN dotnet publish src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj \
     -c Release -o /app/publish --no-restore
 
