@@ -102,8 +102,19 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          ${{ runner.temp }}/scanner/dotnet-sonarscanner begin /k:"lopatnov_translate" /o:"lopatnov" /d:sonar.token="$SONAR_TOKEN" /d:sonar.host.url="https://sonarcloud.io"
+          ${{ runner.temp }}/scanner/dotnet-sonarscanner begin \
+            /k:"lopatnov_translate" /o:"lopatnov" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.cs.opencover.reportsPaths="test-results/**/coverage.opencover.xml"
           dotnet build translate.slnx -c Release --no-restore
+          dotnet test translate.slnx \
+            --configuration Release \
+            --no-build \
+            --filter "Category!=Integration" \
+            --results-directory test-results \
+            --collect:"XPlat Code Coverage" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
           ${{ runner.temp }}/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
 
   proto-lint:
