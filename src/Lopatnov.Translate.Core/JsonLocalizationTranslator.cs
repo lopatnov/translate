@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lopatnov.Translate.Core.Abstractions;
@@ -6,6 +7,13 @@ namespace Lopatnov.Translate.Core;
 
 public static class JsonLocalizationTranslator
 {
+    private static readonly JsonSerializerOptions _serializerOptions = new()
+    {
+        WriteIndented = true,
+        NewLine = "\n",
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public static async Task<(string Json, int StringsTranslated)> TranslateAsync(
         string json,
         ITextTranslator translator,
@@ -15,7 +23,7 @@ public static class JsonLocalizationTranslator
     {
         using var doc = JsonDocument.Parse(json);
         var (node, count) = await TranslateNodeAsync(doc.RootElement, translator, sourceLanguage, targetLanguage, cancellationToken);
-        var result = node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true, NewLine = "\n" }) ?? "{}";
+        var result = node?.ToJsonString(_serializerOptions) ?? "{}";
         return (result, count);
     }
 

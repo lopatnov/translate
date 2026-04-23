@@ -260,14 +260,14 @@ Package: `lopatnov.translate.v1` · Port: `5100`
 
 Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](src/Lopatnov.Translate.Grpc/Protos/translate.proto)
 
-| RPC                      | Phase | Status          |
-| ------------------------ | ----- | --------------- |
-| `TranslateText`          | 1     | Available       |
-| `TranslateLocalization`  | 1     | Available       |
-| `GetCapabilities`        | 1     | Available       |
-| `TranscribeAudio`        | 2     | `UNIMPLEMENTED` |
-| `SynthesizeSpeech`       | 3     | `UNIMPLEMENTED` |
-| `TranslateAudio`         | 4     | `UNIMPLEMENTED` |
+| RPC                     | Phase | Status          |
+| ----------------------- | ----- | --------------- |
+| `TranslateText`         | 1     | Available       |
+| `TranslateLocalization` | 1     | Available       |
+| `GetCapabilities`       | 1     | Available       |
+| `TranscribeAudio`       | 2     | `UNIMPLEMENTED` |
+| `SynthesizeSpeech`      | 3     | `UNIMPLEMENTED` |
+| `TranslateAudio`        | 4     | `UNIMPLEMENTED` |
 
 ### TranslateText request
 
