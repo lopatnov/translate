@@ -288,6 +288,7 @@ message TranslateTextRequest {
   string source_language = 2;  // FLORES-200 code, e.g. "ukr_Cyrl"
   string target_language = 3;  // FLORES-200 code, e.g. "eng_Latn"
   string provider = 4;         // "nllb" | "libretranslate" | "" → defaults to "nllb"
+  string context = 5;          // optional: free-form hint, e.g. "UI button on login form" (reserved for LLM-based providers)
 }
 ```
 

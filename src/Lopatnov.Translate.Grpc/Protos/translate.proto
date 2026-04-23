@@ -18,6 +18,7 @@ message TranslateTextRequest {
   string source_language = 2;
   string target_language = 3;
   string provider = 4;
+  string context = 5;  // optional: free-form hint for the translation (reserved for LLM-based providers)
 }
 
 message TranslateTextResponse {
