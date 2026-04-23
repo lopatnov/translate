@@ -84,7 +84,7 @@ scripts/
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 - Bug reports → [open an issue](https://github.com/lopatnov/translate/issues)
 - Found it useful? A [star on GitHub](https://github.com/lopatnov/translate/stargazers) helps others discover the project

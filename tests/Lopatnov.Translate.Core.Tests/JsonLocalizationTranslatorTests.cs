@@ -248,6 +248,17 @@ public sealed class JsonLocalizationTranslatorTests
         Assert.Equal(2, count);
     }
 
+    [Theory]
+    [InlineData("{not json")]
+    [InlineData("")]
+    [InlineData("invalid")]
+    public async Task TranslateAsync_InvalidJson_Throws(string badJson)
+    {
+        await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() =>
+            JsonLocalizationTranslator.TranslateAsync(
+                badJson, Translator().Object, "eng_Latn", "ukr_Cyrl"));
+    }
+
     [Fact]
     public async Task TranslateAsync_Context_AcceptedWithoutError()
     {

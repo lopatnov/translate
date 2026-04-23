@@ -12,6 +12,8 @@ Published images are available at `ghcr.io/lopatnov/translate`. **Model files ar
 
 This populates `models/nllb/` under the current directory with the NLLB tokenizer and ONNX weights.
 
+> **Note:** `download-models.ps1` downloads INT8-quantized models by default, which have degraded quality for some language pairs. For production use, prefer the float32 export — see [docs/models.md](../docs/models.md#option-a--export-float32-from-huggingface-recommended).
+
 **Step 2 — run with Docker Compose** (recommended):
 
 Create a `docker-compose.yml` next to your `models/` directory:

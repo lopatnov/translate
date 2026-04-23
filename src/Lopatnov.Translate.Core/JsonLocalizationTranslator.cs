@@ -33,7 +33,7 @@ public static class JsonLocalizationTranslator
         var (node, count) = await TranslateNodeAsync(
             doc.RootElement, translator, sourceLanguage, targetLanguage, cancellationToken,
             existingRoot, contextRoot);
-        var result = node?.ToJsonString(_serializerOptions) ?? "{}";
+        var result = node is null ? "null" : node.ToJsonString(_serializerOptions);
         return (result, count);
     }
 

@@ -24,12 +24,21 @@ winget install fullstorydev.grpcurl   # Windows
 brew install grpcurl                  # macOS
 ```
 
+**bash / macOS / Linux:**
+
 ```bash
 grpcurl -plaintext -d '{
   "text": "Привіт, як справи?",
   "source_language": "ukr_Cyrl",
   "target_language": "eng_Latn"
 }' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
+```
+
+**PowerShell (Windows):**
+
+```powershell
+$body = '{"text":"Привіт, як справи?","source_language":"ukr_Cyrl","target_language":"eng_Latn"}'
+grpcurl -plaintext -d $body localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
 Full API examples: [docs/api.md](api.md).
