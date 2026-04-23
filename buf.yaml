@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: src/Lopatnov.Translate.Grpc/Protos
+lint:
+  use:
+    - DEFAULT
+  except:
+    # Proto lives in an ASP.NET project layout (Protos/), not lopatnov/translate/v1/
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE

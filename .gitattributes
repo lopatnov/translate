@@ -1,0 +1,15 @@
+* text=auto eol=lf
+*.cs text eol=lf
+*.proto text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+*.png binary
+*.jpg binary
+*.onnx binary
+*.dll binary

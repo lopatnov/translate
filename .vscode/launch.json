@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Translate Service (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-debug",
+      "program": "${workspaceFolder}/src/Lopatnov.Translate.Grpc/bin/Debug/net10.0/Lopatnov.Translate.Grpc.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Lopatnov.Translate.Grpc",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5100"
+      },
+      "console": "internalConsole"
+    },
+    {
+      "name": "Translate Service (Release)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-release",
+      "program": "${workspaceFolder}/src/Lopatnov.Translate.Grpc/bin/Release/net10.0/Lopatnov.Translate.Grpc.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Lopatnov.Translate.Grpc",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "ASPNETCORE_URLS": "http://localhost:5100"
+      },
+      "console": "internalConsole"
+    },
+    {
+      "name": "Attach to Process",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "Lopatnov.Translate.Grpc"
+    }
+  ]
+}
