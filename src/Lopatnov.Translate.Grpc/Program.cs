@@ -35,6 +35,3 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => "Lopatnov.Translate gRPC service. Use a gRPC client to connect.");
 
 await app.RunAsync();
-
-[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
-public partial class Program { }

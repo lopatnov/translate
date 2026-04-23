@@ -114,8 +114,8 @@ jobs:
             --no-build \
             --filter "Category!=Integration" \
             --results-directory test-results \
-            --collect:"XPlat Code Coverage" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+            --settings coverlet.runsettings \
+            --collect:"XPlat Code Coverage"
           ${{ runner.temp }}/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
 
   proto-lint:
