@@ -167,7 +167,7 @@ public sealed class JsonLocalizationTranslatorTests
             .ReturnsAsync("translated");
 
         await JsonLocalizationTranslator.TranslateAsync(
-            input, mock.Object, "eng_Latn", "ukr_Cyrl", cts.Token);
+            input, mock.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: cts.Token);
 
         Assert.Equal(cts.Token, capturedToken);
     }

@@ -19,9 +19,9 @@ public static class JsonLocalizationTranslator
         ITextTranslator translator,
         string sourceLanguage,
         string targetLanguage,
-        CancellationToken cancellationToken = default,
         string? existingTranslation = null,
-        string? context = null)
+        string? context = null,
+        CancellationToken cancellationToken = default)
     {
         using var doc = JsonDocument.Parse(json);
         using var existingDoc = existingTranslation is null ? null : JsonDocument.Parse(existingTranslation);
@@ -31,8 +31,8 @@ public static class JsonLocalizationTranslator
         JsonElement? contextRoot = contextDoc is null ? null : contextDoc.RootElement;
 
         var (node, count) = await TranslateNodeAsync(
-            doc.RootElement, translator, sourceLanguage, targetLanguage, cancellationToken,
-            existingRoot, contextRoot);
+            doc.RootElement, translator, sourceLanguage, targetLanguage,
+            existingRoot, contextRoot, cancellationToken);
         var result = node is null ? "null" : node.ToJsonString(_serializerOptions);
         return (result, count);
     }
@@ -42,9 +42,9 @@ public static class JsonLocalizationTranslator
         ITextTranslator translator,
         string sourceLanguage,
         string targetLanguage,
-        CancellationToken cancellationToken,
         JsonElement? existingElement,
-        JsonElement? contextElement)
+        JsonElement? contextElement,
+        CancellationToken cancellationToken)
     {
         switch (element.ValueKind)
         {
@@ -54,9 +54,10 @@ public static class JsonLocalizationTranslator
                 foreach (var prop in element.EnumerateObject())
                 {
                     var (child, c) = await TranslateNodeAsync(
-                        prop.Value, translator, sourceLanguage, targetLanguage, cancellationToken,
+                        prop.Value, translator, sourceLanguage, targetLanguage,
                         TryGetProperty(existingElement, prop.Name),
-                        TryGetProperty(contextElement, prop.Name));
+                        TryGetProperty(contextElement, prop.Name),
+                        cancellationToken);
                     obj[prop.Name] = child;
                     objCount += c;
                 }
@@ -69,9 +70,10 @@ public static class JsonLocalizationTranslator
                 foreach (var item in element.EnumerateArray())
                 {
                     var (child, c) = await TranslateNodeAsync(
-                        item, translator, sourceLanguage, targetLanguage, cancellationToken,
+                        item, translator, sourceLanguage, targetLanguage,
                         TryGetIndex(existingElement, index),
-                        TryGetIndex(contextElement, index));
+                        TryGetIndex(contextElement, index),
+                        cancellationToken);
                     arr.Add(child);
                     arrCount += c;
                     index++;

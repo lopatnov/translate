@@ -60,9 +60,9 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
                 translator,
                 request.SourceLanguage,
                 request.TargetLanguage,
-                context.CancellationToken,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
-                string.IsNullOrWhiteSpace(request.Context) ? null : request.Context);
+                string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
+                context.CancellationToken);
 
             return new TranslateLocalizationResponse { Json = json, StringsTranslated = count };
         }
