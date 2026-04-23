@@ -1,0 +1,6 @@
+title: Lopatnov.Translate
+description: Self-hosted Whisper → NLLB-200 → Piper cascade over gRPC.
+  Speech and text translation powered by ONNX Runtime on .NET 10.
+show_downloads: true
+google_analytics:
+theme: jekyll-theme-cayman
