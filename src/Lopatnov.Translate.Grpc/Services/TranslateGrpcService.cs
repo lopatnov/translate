@@ -1,11 +1,13 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using System.Text.Json;
 
 namespace Lopatnov.Translate.Grpc.Services;
 
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
+    private const string DefaultProvider = "nllb";
     private readonly IServiceProvider _services;
 
     public TranslateGrpcService(IServiceProvider services)
@@ -14,9 +16,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var providerKey = string.IsNullOrWhiteSpace(request.Provider) ? "nllb" : request.Provider.Trim();
-        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
-            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
+        var (translator, providerKey) = ResolveTranslator(request.Provider);
 
         var translated = await translator.TranslateAsync(
             request.Text,
@@ -48,6 +48,30 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         return Task.FromResult(response);
     }
 
+    public override async Task<TranslateLocalizationResponse> TranslateLocalization(
+        TranslateLocalizationRequest request, ServerCallContext context)
+    {
+        var (translator, _) = ResolveTranslator(request.Provider);
+
+        try
+        {
+            var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+                request.Json,
+                translator,
+                request.SourceLanguage,
+                request.TargetLanguage,
+                string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
+                string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
+                context.CancellationToken);
+
+            return new TranslateLocalizationResponse { Json = json, StringsTranslated = count };
+        }
+        catch (JsonException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Invalid JSON in request: {ex.Message}"));
+        }
+    }
+
     public override Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));
@@ -59,4 +83,12 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override Task<TranslateAudioResponse> TranslateAudio(
         TranslateAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 4"));
+
+    private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
+    {
+        var providerKey = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
+        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
+            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
+        return (translator, providerKey);
+    }
 }
