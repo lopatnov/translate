@@ -118,6 +118,16 @@ grpcurl -plaintext -d '{
 }' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
+Translate a JSON localization file (English → Ukrainian):
+
+```bash
+grpcurl -plaintext -d '{
+  "json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}",
+  "source_language": "eng_Latn",
+  "target_language": "ukr_Cyrl"
+}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+```
+
 Query capabilities:
 
 ```bash
@@ -250,13 +260,14 @@ Package: `lopatnov.translate.v1` · Port: `5100`
 
 Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](src/Lopatnov.Translate.Grpc/Protos/translate.proto)
 
-| RPC                | Phase | Status          |
-| ------------------ | ----- | --------------- |
-| `TranslateText`    | 1     | Available       |
-| `GetCapabilities`  | 1     | Available       |
-| `TranscribeAudio`  | 2     | `UNIMPLEMENTED` |
-| `SynthesizeSpeech` | 3     | `UNIMPLEMENTED` |
-| `TranslateAudio`   | 4     | `UNIMPLEMENTED` |
+| RPC                      | Phase | Status          |
+| ------------------------ | ----- | --------------- |
+| `TranslateText`          | 1     | Available       |
+| `TranslateLocalization`  | 1     | Available       |
+| `GetCapabilities`        | 1     | Available       |
+| `TranscribeAudio`        | 2     | `UNIMPLEMENTED` |
+| `SynthesizeSpeech`       | 3     | `UNIMPLEMENTED` |
+| `TranslateAudio`         | 4     | `UNIMPLEMENTED` |
 
 ### TranslateText request
 
@@ -266,6 +277,25 @@ message TranslateTextRequest {
   string source_language = 2;  // FLORES-200 code, e.g. "ukr_Cyrl"
   string target_language = 3;  // FLORES-200 code, e.g. "eng_Latn"
   string provider = 4;         // "nllb" | "libretranslate" | "" → defaults to "nllb"
+}
+```
+
+### TranslateLocalization request
+
+Translates all leaf string values in a JSON localization file, preserving the key structure.
+Non-string values (numbers, booleans, null) and blank strings are passed through unchanged.
+
+```protobuf
+message TranslateLocalizationRequest {
+  string json = 1;             // JSON object, e.g. i18n / l10n file content
+  string source_language = 2;  // FLORES-200 code, e.g. "eng_Latn"
+  string target_language = 3;  // FLORES-200 code, e.g. "ukr_Cyrl"
+  string provider = 4;         // "nllb" | "libretranslate" | "" → defaults to "nllb"
+}
+
+message TranslateLocalizationResponse {
+  string json = 1;             // translated JSON, same structure as input
+  int32 strings_translated = 2;
 }
 ```
 

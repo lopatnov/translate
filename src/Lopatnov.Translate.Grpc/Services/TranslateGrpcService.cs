@@ -48,6 +48,23 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         return Task.FromResult(response);
     }
 
+    public override async Task<TranslateLocalizationResponse> TranslateLocalization(
+        TranslateLocalizationRequest request, ServerCallContext context)
+    {
+        var providerKey = string.IsNullOrWhiteSpace(request.Provider) ? "nllb" : request.Provider.Trim();
+        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
+            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
+
+        var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
+            request.Json,
+            translator,
+            request.SourceLanguage,
+            request.TargetLanguage,
+            context.CancellationToken);
+
+        return new TranslateLocalizationResponse { Json = json, StringsTranslated = count };
+    }
+
     public override Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));

@@ -6,6 +6,7 @@ option csharp_namespace = "Lopatnov.Translate.Grpc";
 
 service TranslateService {
   rpc TranslateText (TranslateTextRequest) returns (TranslateTextResponse);
+  rpc TranslateLocalization (TranslateLocalizationRequest) returns (TranslateLocalizationResponse);
   rpc TranscribeAudio (TranscribeAudioRequest) returns (TranscribeAudioResponse);
   rpc SynthesizeSpeech (SynthesizeSpeechRequest) returns (SynthesizeSpeechResponse);
   rpc TranslateAudio (TranslateAudioRequest) returns (TranslateAudioResponse);
@@ -23,6 +24,18 @@ message TranslateTextResponse {
   string translated_text = 1;
   string detected_language = 2;
   string provider_used = 3;
+}
+
+message TranslateLocalizationRequest {
+  string json = 1;
+  string source_language = 2;
+  string target_language = 3;
+  string provider = 4;
+}
+
+message TranslateLocalizationResponse {
+  string json = 1;
+  int32 strings_translated = 2;
 }
 
 message TranscribeAudioRequest {
