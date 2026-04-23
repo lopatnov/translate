@@ -8,9 +8,9 @@ updates:
       open-pull-requests-limit: 5
       groups:
           test:
-              patterns: [ "xunit*", "Moq", "coverlet.*", "Microsoft.NET.Test.Sdk" ]
+              patterns: ["xunit*", "Moq", "coverlet.*", "Microsoft.NET.Test.Sdk"]
           microsoft:
-              patterns: [ "Microsoft.*", "Grpc.*", "Google.Protobuf" ]
+              patterns: ["Microsoft.*", "Grpc.*", "Google.Protobuf"]
 
     - package-ecosystem: "github-actions"
       directory: "/"
