@@ -15,7 +15,7 @@ public static class JsonLocalizationTranslator
     {
         using var doc = JsonDocument.Parse(json);
         var (node, count) = await TranslateNodeAsync(doc.RootElement, translator, sourceLanguage, targetLanguage, cancellationToken);
-        var result = node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "{}";
+        var result = node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true, NewLine = "\n" }) ?? "{}";
         return (result, count);
     }
 
