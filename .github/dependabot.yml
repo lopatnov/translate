@@ -1,25 +1,25 @@
 version: 2
 updates:
-  - package-ecosystem: "nuget"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    groups:
-      microsoft:
-        patterns: ["Microsoft.*", "Grpc.*", "Google.Protobuf"]
-      test:
-        patterns: ["xunit*", "Moq", "coverlet.*", "Microsoft.NET.Test.Sdk"]
+    - package-ecosystem: "nuget"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+          day: "monday"
+      open-pull-requests-limit: 5
+      groups:
+          test:
+              patterns: [ "xunit*", "Moq", "coverlet.*", "Microsoft.NET.Test.Sdk" ]
+          microsoft:
+              patterns: [ "Microsoft.*", "Grpc.*", "Google.Protobuf" ]
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+          day: "monday"
 
-  - package-ecosystem: "docker"
-    directory: "/docker"
-    schedule:
-      interval: "weekly"
-      day: "monday"
+    - package-ecosystem: "docker"
+      directory: "/docker"
+      schedule:
+          interval: "weekly"
+          day: "monday"
