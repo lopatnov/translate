@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.ML.OnnxRuntime;
 using Lopatnov.Translate.Nllb.Abstractions;
 
 namespace Lopatnov.Translate.Nllb;
 
+[ExcludeFromCodeCoverage]
 public sealed class OnnxSessionAdapter : IOnnxSession
 {
     private readonly InferenceSession _session;
