@@ -40,7 +40,7 @@ public sealed class LibreTranslateClient : ITextTranslator
     internal static string ToIso(string flores) =>
         FloresIsoCodes.TryGetValue(flores, out var iso) ? iso : flores;
 
-    private static readonly IReadOnlyDictionary<string, string> FloresIsoCodes =
+    private static readonly Dictionary<string, string> FloresIsoCodes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["eng_Latn"] = "en",

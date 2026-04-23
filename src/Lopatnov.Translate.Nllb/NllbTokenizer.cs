@@ -73,7 +73,7 @@ public sealed class NllbTokenizer : INllbTokenizer
         return parsed;
     }
 
-    private static IReadOnlyDictionary<string, long> ParseTokenizerJson(string path)
+    private static Dictionary<string, long> ParseTokenizerJson(string path)
     {
         using var stream = File.OpenRead(path);
         using var doc = JsonDocument.Parse(stream);

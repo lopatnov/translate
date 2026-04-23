@@ -75,19 +75,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Decoder: run Argmax directly on the native logits tensor — no managed copy.
-            // Native memory is freed by the adapter as soon as this callback returns.
-            var nextToken = -1L;
-            _decoderSession.Run(
-                [
-                    NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
-                    NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState!),
-                    NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
-                ],
-                ["logits"],
-                outputs => nextToken = Argmax(
-                    outputs.First(o => o.Name == "logits").AsTensor<float>(),
-                    decoderCount - 1));
+            var nextToken = RunDecoderStep(decoderBuf, decoderCount, encoderHiddenState!, attentionMask);
 
             if (nextToken == NllbTokenizer.EosTokenId)
                 break;
@@ -104,6 +92,24 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         if (_ownsTokenizer) _tokenizer.Dispose();
         if (_ownsEncoder) _encoderSession.Dispose();
         if (_ownsDecoder) _decoderSession.Dispose();
+    }
+
+    private long RunDecoderStep(long[] decoderBuf, int decoderCount, DenseTensor<float> encoderHiddenState, long[] attentionMask)
+    {
+        // Runs Argmax directly on the native logits tensor — no managed copy.
+        // Native memory is freed by the adapter as soon as the callback returns.
+        var nextToken = -1L;
+        _decoderSession.Run(
+            [
+                NamedOnnxValue.CreateFromTensor("input_ids", CreateLongTensor(decoderBuf, decoderCount)),
+                NamedOnnxValue.CreateFromTensor("encoder_hidden_states", encoderHiddenState),
+                NamedOnnxValue.CreateFromTensor("encoder_attention_mask", CreateLongTensor(attentionMask)),
+            ],
+            ["logits"],
+            outputs => nextToken = Argmax(
+                outputs.First(o => o.Name == "logits").AsTensor<float>(),
+                decoderCount - 1));
+        return nextToken;
     }
 
     private static DenseTensor<long> CreateLongTensor(long[] data)
