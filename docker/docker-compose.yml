@@ -26,11 +26,13 @@ services:
 
   libretranslate:
     image: libretranslate/libretranslate:v1.9.5
+    user: "0"
     ports:
       - "5000:5000"
     volumes:
-      - libretranslate-models:/home/libretranslate/.local/share/argos-translate
+      - libretranslate-models:/data/argos-packages
     environment:
+      - ARGOS_PACKAGES_DIR=/data/argos-packages
       # Load only the languages declared in Language.cs to reduce startup time and memory.
       - LT_LOAD_ONLY=en,uk,ru,de,fr,es,pl,zh,ja,ar
     healthcheck:
