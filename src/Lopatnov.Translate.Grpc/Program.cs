@@ -1,6 +1,7 @@
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Grpc.Services;
 using Lopatnov.Translate.LibreTranslate;
+using Lopatnov.Translate.M2M100;
 using Lopatnov.Translate.Nllb;
 using Microsoft.Extensions.Options;
 
@@ -16,6 +17,17 @@ builder.Services.AddOptions<NllbOptions>()
     .ValidateOnStart();
 builder.Services.AddKeyedSingleton<ITextTranslator, NllbTranslator>("nllb", (sp, _) =>
     new NllbTranslator(sp.GetRequiredService<IOptions<NllbOptions>>()));
+
+var m2m100Path = builder.Configuration["Models:M2M100:Path"];
+if (!string.IsNullOrWhiteSpace(m2m100Path))
+{
+    builder.Services.AddOptions<M2M100Options>()
+        .Bind(builder.Configuration.GetSection("Models:M2M100"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    builder.Services.AddKeyedSingleton<ITextTranslator>("m2m100", (sp, _) =>
+        new M2M100Translator(sp.GetRequiredService<IOptions<M2M100Options>>()));
+}
 
 var libreTranslateUrl = builder.Configuration["LibreTranslate:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(libreTranslateUrl))
