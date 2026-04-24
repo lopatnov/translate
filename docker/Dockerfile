@@ -13,7 +13,7 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
-RUN adduser --disabled-password --gecos "" --home /nonexistent --no-create-home appuser \
+RUN useradd --system --no-create-home --shell /sbin/nologin appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
