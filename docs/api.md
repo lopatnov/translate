@@ -45,12 +45,8 @@ message TranslateTextResponse {
 
 ### Example
 
-```bash
-grpcurl -plaintext -d '{
-  "text": "Привіт, як справи?",
-  "source_language": "ukr_Cyrl",
-  "target_language": "eng_Latn"
-}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
+```
+grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
 ---
@@ -87,23 +83,14 @@ message TranslateLocalizationResponse {
 
 Translate a full i18n file:
 
-```bash
-grpcurl -plaintext -d '{
-  "json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}",
-  "source_language": "eng_Latn",
-  "target_language": "ukr_Cyrl"
-}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+```
+grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
 ```
 
 Incremental translation — reuse existing, translate only new keys:
 
-```bash
-grpcurl -plaintext -d '{
-  "json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}",
-  "source_language": "eng_Latn",
-  "target_language": "ukr_Cyrl",
-  "existing_translation": "{\"auth\":{\"signIn\":\"Увійти\"}}"
-}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+```
+grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl", "existing_translation": "{\"auth\":{\"signIn\":\"Увійти\"}}"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
 ```
 
 ---
@@ -112,8 +99,8 @@ grpcurl -plaintext -d '{
 
 Returns supported languages, available providers, and STT/TTS availability.
 
-```bash
-grpcurl -plaintext -d '{}' localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
+```
+grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{}' localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
 ```
 
 ---

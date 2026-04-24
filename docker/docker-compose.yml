@@ -25,20 +25,25 @@ services:
 
   libretranslate:
     image: libretranslate/libretranslate:v1.9.5
+    user: "0"   # bind mount from Windows is root-owned; running as root avoids permission errors
     ports:
       - "5000:5000"
+    volumes:
+      - ../models/libretranslate:/data/argos-packages
     environment:
+      - ARGOS_PACKAGES_DIR=/data/argos-packages
       # Load only the languages declared in Language.cs to reduce startup time and memory.
       - LT_LOAD_ONLY=en,uk,ru,de,fr,es,pl,zh,ja,ar
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5000/languages || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/languages')\""]
       interval: 15s
       timeout: 5s
       retries: 8
-      start_period: 60s
+      start_period: 3600s   # first run downloads ~3 GB of models
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 4g    # ~300 MB per language; 10 languages ~3 GB
           cpus: '1.0'
+

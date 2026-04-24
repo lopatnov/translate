@@ -73,6 +73,11 @@ Citation:
 | [Microsoft.ML.Tokenizers](https://github.com/dotnet/machinelearning) | Microsoft | MIT |
 | [NAudio](https://github.com/naudio/NAudio) | Mark Heath | MIT |
 | [Moq](https://github.com/devlooped/moq) | Devlooped | BSD 3-Clause |
+| [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) *(optional)* | LibreTranslate Contributors | AGPL-3.0 |
+
+LibreTranslate is an **optional external service** — it is not bundled with this repository.
+When enabled, this project communicates with a LibreTranslate instance over HTTP.
+Deploying LibreTranslate separately is subject to its AGPL-3.0 terms.
 
 Full dependency list is available in the project files under `src/`.
 
