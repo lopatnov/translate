@@ -40,7 +40,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-      start_period: 3600s   # first run downloads ~3 GB of models
+      start_period: 600s   # first run downloads ~3 GB of models
     restart: unless-stopped
     deploy:
       resources:
