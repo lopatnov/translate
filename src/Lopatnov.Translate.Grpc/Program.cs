@@ -14,18 +14,21 @@ builder.Services.AddOptions<NllbOptions>()
     .Bind(builder.Configuration.GetSection("Models:Nllb"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
-builder.Services.AddOptions<LibreTranslateOptions>()
-    .Bind(builder.Configuration.GetSection("LibreTranslate"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
 builder.Services.AddKeyedSingleton<ITextTranslator, NllbTranslator>("nllb", (sp, _) =>
     new NllbTranslator(sp.GetRequiredService<IOptions<NllbOptions>>()));
 
-builder.Services.AddHttpClient<LibreTranslateClient>((sp, c) =>
-    c.BaseAddress = new Uri(sp.GetRequiredService<IOptions<LibreTranslateOptions>>().Value.BaseUrl));
-builder.Services.AddKeyedScoped<ITextTranslator>("libretranslate", (sp, _) =>
-    (ITextTranslator)sp.GetRequiredService<LibreTranslateClient>());
+var libreTranslateUrl = builder.Configuration["LibreTranslate:BaseUrl"];
+if (!string.IsNullOrWhiteSpace(libreTranslateUrl))
+{
+    builder.Services.AddOptions<LibreTranslateOptions>()
+        .Bind(builder.Configuration.GetSection("LibreTranslate"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    builder.Services.AddHttpClient<LibreTranslateClient>((sp, c) =>
+        c.BaseAddress = new Uri(sp.GetRequiredService<IOptions<LibreTranslateOptions>>().Value.BaseUrl!));
+    builder.Services.AddKeyedScoped<ITextTranslator>("libretranslate", (sp, _) =>
+        (ITextTranslator)sp.GetRequiredService<LibreTranslateClient>());
+}
 
 var app = builder.Build();
 
