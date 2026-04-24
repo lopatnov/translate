@@ -122,6 +122,8 @@ grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d 
 
 Uses [FLORES-200](https://github.com/facebookresearch/flores) language codes. Full list via `GetCapabilities`.
 
+Need a language that isn't listed? Feel free to [open an issue](https://github.com/lopatnov/translate/issues) — language requests are welcome.
+
 ---
 
 ## Providers
