@@ -132,6 +132,8 @@ jobs:
 
       - name: Set up buf
         uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Buf lint
         run: buf lint
