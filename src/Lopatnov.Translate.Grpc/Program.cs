@@ -1,3 +1,4 @@
+using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Grpc;
 using Lopatnov.Translate.Grpc.Services;
@@ -11,6 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGrpc();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
+
+builder.Services.AddSingleton<ILanguageDetector, HeuristicLanguageDetector>();
 
 // --- Provider allowlist + TTL ---
 builder.Services.AddOptions<AllowedProvidersOptions>()

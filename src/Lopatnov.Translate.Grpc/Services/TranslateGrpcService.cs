@@ -9,24 +9,39 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private const string DefaultProvider = "nllb";
     private readonly ModelSessionManager _manager;
+    private readonly ILanguageDetector _detector;
 
-    public TranslateGrpcService(ModelSessionManager manager)
-        => _manager = manager;
+    public TranslateGrpcService(ModelSessionManager manager, ILanguageDetector detector)
+    {
+        _manager = manager;
+        _detector = detector;
+    }
 
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
         var (translator, providerKey) = ResolveTranslator(request.Provider);
 
+        var sourceLanguage = request.SourceLanguage;
+        string? detectedLanguage = null;
+
+        if (string.IsNullOrWhiteSpace(sourceLanguage) ||
+            sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            detectedLanguage = _detector.Detect(request.Text);
+            sourceLanguage = detectedLanguage;
+        }
+
         var translated = await translator.TranslateAsync(
             request.Text,
-            request.SourceLanguage,
+            sourceLanguage,
             request.TargetLanguage,
             context.CancellationToken);
 
         return new TranslateTextResponse
         {
             TranslatedText = translated,
+            DetectedLanguage = detectedLanguage ?? string.Empty,
             ProviderUsed = providerKey,
         };
     }
