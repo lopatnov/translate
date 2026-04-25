@@ -8,10 +8,10 @@ namespace Lopatnov.Translate.Grpc.Services;
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private const string DefaultProvider = "nllb";
-    private readonly IServiceProvider _services;
+    private readonly ModelSessionManager _manager;
 
-    public TranslateGrpcService(IServiceProvider services)
-        => _services = services;
+    public TranslateGrpcService(ModelSessionManager manager)
+        => _manager = manager;
 
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
@@ -39,9 +39,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             SttAvailable = false,
             TtsAvailable = false,
         };
-        var knownProviders = new[] { "nllb", "m2m100", "libretranslate" };
-        response.AvailableProviders.AddRange(
-            knownProviders.Where(p => _services.GetKeyedService<ITextTranslator>(p) != null));
+        response.AvailableProviders.AddRange(_manager.GetAvailableProviders());
         response.SupportedLanguages.AddRange([
             Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
             Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
@@ -88,9 +86,18 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
     private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
     {
-        var providerKey = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
-        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
-            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
-        return (translator, providerKey);
+        var key = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
+        try
+        {
+            return (_manager.Get(key), key);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{key}'"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
+        }
     }
 }
