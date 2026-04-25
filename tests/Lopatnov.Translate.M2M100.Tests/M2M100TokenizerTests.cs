@@ -66,8 +66,8 @@ public sealed class M2M100TokenizerTests
 internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
 {
     public const long EnLangId = 128022L;
-    public const long UkLangId = 128060L;
-    public const long RuLangId = 128045L;
+    public const long UkLangId = 128094L;
+    public const long RuLangId = 128077L;
 
     private static readonly Dictionary<string, long> IsoIds = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -28,7 +28,7 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
         _options = options;
         _ownsTokenizer = tokenizer is null;
         _tokenizer = tokenizer ?? new M2M100Tokenizer(options.Path, options.TokenizerFile,
-            options.TokenizerConfigFile, options.SentencePieceOffset);
+            options.TokenizerConfigFile, options.VocabFile);
         _ownsEncoder = encoderSession is null;
         _encoderSession = encoderSession ?? new OnnxSessionAdapter(
             Path.Combine(options.Path, options.EncoderFile));

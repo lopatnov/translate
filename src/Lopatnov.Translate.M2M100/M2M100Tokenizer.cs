@@ -10,9 +10,12 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     public const long PadTokenId = 1;
     public const long BosTokenId = 0;
 
+    private const char SentencePiecePrefixChar = '▁'; // ▁ (U+2581) — SentencePiece word-boundary marker
+
     private readonly SentencePieceTokenizer _tokenizer;
-    private readonly IReadOnlyDictionary<string, long> _isoToTokenId;
-    private readonly int _spOffset;
+    private readonly IReadOnlyDictionary<string, long> _vocab;        // piece string → HF token ID
+    private readonly IReadOnlyDictionary<long, string> _reverseVocab; // HF token ID → piece string
+    private readonly IReadOnlyDictionary<string, long> _isoToTokenId; // ISO 639-1 lang code → token ID
 
     // Maps FLORES-200 codes used by ITextTranslator callers to M2M-100 ISO 639-1 codes.
     private static readonly IReadOnlyDictionary<string, string> FlorestoIso =
@@ -32,31 +35,36 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
         };
 
     public M2M100Tokenizer(string modelDir, string tokenizerFile = "sentencepiece.bpe.model",
-        string configFile = "tokenizer.json", int sentencePieceOffset = 4)
+        string configFile = "added_tokens.json", string vocabFile = "vocab.json")
     {
-        _spOffset = sentencePieceOffset;
-
-        var modelPath = System.IO.Path.Combine(modelDir, tokenizerFile);
+        var modelPath = Path.Combine(modelDir, tokenizerFile);
         using var stream = File.OpenRead(modelPath);
         _tokenizer = SentencePieceTokenizer.Create(stream, addBeginningOfSentence: false,
             addEndOfSentence: false, specialTokens: null);
 
-        var configPath = System.IO.Path.Combine(modelDir, configFile);
+        var configPath = Path.Combine(modelDir, configFile);
         _isoToTokenId = LoadLanguageTokenIds(configPath);
+
+        var vocabPath = Path.Combine(modelDir, vocabFile);
+        (_vocab, _reverseVocab) = LoadVocabJson(vocabPath);
     }
 
     public long[] Encode(string text, string sourceLanguage)
     {
         var langId = GetLanguageTokenId(sourceLanguage);
-        var tokenIds = _tokenizer.EncodeToIds(text, considerPreTokenization: true, considerNormalization: true);
 
-        // M2M-100 encoder format: [src_lang_token] tokens [EOS]
-        // SentencePiece IDs need +_spOffset because HuggingFace M2M-100 reserves
-        // IDs 0-3 for BOS/PAD/EOS/UNK before the SP vocabulary starts.
-        var result = new long[tokenIds.Count + 2];
+        // M2M-100 uses vocab.json as the authoritative piece→ID mapping (same as HuggingFace
+        // M2M100Tokenizer in Python). SP IDs from EncodeToIds cannot be used directly because
+        // HuggingFace's ID numbering diverges from the raw SP model's internal IDs.
+        var tokens = _tokenizer.EncodeToTokens(text, out _,
+            addBeginningOfSentence: false, addEndOfSentence: false,
+            considerPreTokenization: true, considerNormalization: true);
+
+        // M2M-100 encoder input format: [src_lang_token] BPE_tokens... [EOS]
+        var result = new long[tokens.Count + 2];
         result[0] = langId;
-        for (var i = 0; i < tokenIds.Count; i++)
-            result[i + 1] = tokenIds[i] + _spOffset;
+        for (var i = 0; i < tokens.Count; i++)
+            result[i + 1] = _vocab.TryGetValue(tokens[i].Value, out var hfId) ? hfId : 3L; // 3 = <unk>
         result[^1] = EosTokenId;
         return result;
     }
@@ -64,11 +72,17 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     public string Decode(IEnumerable<long> tokenIds)
     {
         var langIds = new HashSet<long>(_isoToTokenId.Values);
-        var filtered = tokenIds
-            .Where(id => id >= _spOffset && !langIds.Contains(id))
-            .Select(id => (int)(id - _spOffset))
-            .ToList();
-        return _tokenizer.Decode(filtered) ?? string.Empty;
+
+        // Regular BPE token IDs are in [4, 128003]; filter out special tokens (0–3) and lang tokens (128004+).
+        var pieces = tokenIds
+            .Where(id => id >= 4 && !langIds.Contains(id))
+            .Select(id => _reverseVocab.TryGetValue(id, out var p) ? p : string.Empty)
+            .Where(p => p.Length > 0);
+
+        // SentencePiece uses ▁ (U+2581) as a word-boundary prefix; replace with a regular space.
+        return string.Join(string.Empty, pieces)
+            .Replace(SentencePiecePrefixChar, ' ')
+            .Trim();
     }
 
     public long GetLanguageTokenId(string languageCode)
@@ -85,14 +99,35 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
 
     public void Dispose() { }
 
+    private static (IReadOnlyDictionary<string, long>, IReadOnlyDictionary<long, string>) LoadVocabJson(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException(
+                $"vocab.json not found at '{path}'. " +
+                "M2M-100 requires vocab.json for piece→HF-ID mapping.", path);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path, System.Text.Encoding.UTF8));
+        var vocab = new Dictionary<string, long>();
+        var reverse = new Dictionary<long, string>();
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var id = prop.Value.GetInt64();
+            vocab[prop.Name] = id;
+            reverse[id] = prop.Name;
+        }
+
+        return (vocab, reverse);
+    }
+
     private static IReadOnlyDictionary<string, long> LoadLanguageTokenIds(string configPath)
     {
         if (!File.Exists(configPath))
             throw new FileNotFoundException(
-                $"tokenizer.json not found at '{configPath}'. " +
-                "M2M-100 language token IDs must be loaded from the model's tokenizer.json.", configPath);
+                $"Language token config not found at '{configPath}'. " +
+                "M2M-100 language token IDs must be loaded from added_tokens.json.", configPath);
 
-        var parsed = ParseTokenizerJson(configPath);
+        var parsed = ParseLangConfig(configPath);
         if (parsed.Count == 0)
             throw new InvalidOperationException(
                 $"'{configPath}' exists but contains no M2M-100 language token entries. " +
@@ -100,27 +135,48 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
         return parsed;
     }
 
-    private static Dictionary<string, long> ParseTokenizerJson(string path)
+    private static Dictionary<string, long> ParseLangConfig(string path)
     {
         using var stream = File.OpenRead(path);
         using var doc = JsonDocument.Parse(stream);
 
         var map = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var addedTokens = doc.RootElement.GetProperty("added_tokens");
+        var root = doc.RootElement;
 
-        foreach (var token in addedTokens.EnumerateArray())
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("added_tokens", out var addedTokensArr)
+            && addedTokensArr.ValueKind == JsonValueKind.Array)
         {
-            var content = token.GetProperty("content").GetString() ?? string.Empty;
-            var id = token.GetProperty("id").GetInt64();
-
-            // M2M-100 language tokens are formatted as "__en__", "__uk__", etc.
-            string? code = null;
-            if (content.StartsWith("__") && content.EndsWith("__") && content.Length is > 4 and <= 10)
-                code = content[2..^2];
-
-            if (code != null)
-                map[code] = id;
+            // tokenizer.json format: {"added_tokens": [{"content": "__en__", "id": 128022}, ...]}
+            foreach (var token in addedTokensArr.EnumerateArray())
+            {
+                var content = token.GetProperty("content").GetString() ?? string.Empty;
+                var id = token.GetProperty("id").GetInt64();
+                if (TryExtractLangCode(content, out var code))
+                    map[code!] = id;
+            }
         }
+        else if (root.ValueKind == JsonValueKind.Object)
+        {
+            // added_tokens.json format: {"__en__": 128022, "__uk__": 128094, ...}
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (TryExtractLangCode(prop.Name, out var code))
+                    map[code!] = prop.Value.GetInt64();
+            }
+        }
+
         return map;
+    }
+
+    private static bool TryExtractLangCode(string content, out string? code)
+    {
+        if (content.StartsWith("__") && content.EndsWith("__") && content.Length is > 4 and <= 10)
+        {
+            code = content[2..^2];
+            return true;
+        }
+        code = null;
+        return false;
     }
 }

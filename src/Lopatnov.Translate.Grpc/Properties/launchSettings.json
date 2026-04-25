@@ -8,7 +8,8 @@
       "applicationUrl": "http://localhost:5100",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Models__Nllb__Path": "../../models/nllb"
+        "Models__Nllb__Path": "../../models/nllb",
+        "Models__M2M100__Path": "../../models/m2m100"
       }
     },
     "https": {
@@ -18,7 +19,8 @@
       "applicationUrl": "https://localhost:7089;http://localhost:5100",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Models__Nllb__Path": "../../models/nllb"
+        "Models__Nllb__Path": "../../models/nllb",
+        "Models__M2M100__Path": "../../models/m2m100"
       }
     }
   }

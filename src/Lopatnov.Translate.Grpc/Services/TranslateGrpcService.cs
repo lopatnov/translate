@@ -39,7 +39,9 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             SttAvailable = false,
             TtsAvailable = false,
         };
-        response.AvailableProviders.AddRange(["nllb", "libretranslate"]);
+        var knownProviders = new[] { "nllb", "m2m100", "libretranslate" };
+        response.AvailableProviders.AddRange(
+            knownProviders.Where(p => _services.GetKeyedService<ITextTranslator>(p) != null));
         response.SupportedLanguages.AddRange([
             Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
             Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
