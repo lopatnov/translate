@@ -4,11 +4,15 @@ using Lopatnov.Translate.Core.Abstractions;
 namespace Lopatnov.Translate.Core;
 
 /// <summary>
-/// Language detector backed by the fastText LID-176 compressed model (lid.176.ftz, ~917 KB).
-/// Loads the binary .ftz file directly — no Python or native fastText library needed.
+/// Language detector backed by a fastText supervised model (.ftz compressed or .bin full-precision).
+/// Loads the binary file directly — no Python or native fastText library needed.
+///
+/// Supported models:
+///   lid.176.ftz  — fastText LID-176, CC BY-SA 3.0, 176 languages (~917 KB, quantized)
+///   model.bin    — GlotLID v3 (cis-lmu/glotlid-model), Apache 2.0, 1633 languages
 ///
 /// Binary format reference: fastText v12 (magic = 793712314).
-/// Model weights: product-quantized input matrix + full-precision output matrix.
+/// Model weights: product-quantized (.ftz) or full-precision (.bin) input matrix.
 /// Inference: average word/char-ngram embeddings → linear layer → argmax.
 /// </summary>
 public sealed class FastTextLanguageDetector : ILanguageDetector
@@ -41,6 +45,9 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     private readonly float[]? _normCentroids; // 256 scalar norms
     private readonly byte[]? _normCodes;       // inputRows bytes
 
+    // --- dense input matrix (.bin models, e.g. GlotLID) ---
+    private readonly float[]? _dense; // non-null when qinput=false; inputRows * dim floats
+
     // --- output matrix (full precision) ---
     private readonly float[] _output;  // nlabels * dim (row-major)
     private readonly string[] _labels; // FLORES-200 codes, indexed by label row
@@ -52,6 +59,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         Dictionary<string, int> wordToId,
         int pqNsubq, int pqDsub, int pqLastDsub, float[] pqCentroids, byte[] codes, long inputRows,
         bool qnorm, float[]? normCentroids, byte[]? normCodes,
+        float[]? dense,
         float[] output, string[] labels)
     {
         _dim = dim; _minn = minn; _maxn = maxn; _bucket = bucket; _nwords = nwords; _labelPrefix = labelPrefix;
@@ -59,6 +67,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         _pqNsubq = pqNsubq; _pqDsub = pqDsub; _pqLastDsub = pqLastDsub;
         _pqCentroids = pqCentroids; _codes = codes; _inputRows = inputRows;
         _qnorm = qnorm; _normCentroids = normCentroids; _normCodes = normCodes;
+        _dense = dense;
         _output = output; _labels = labels;
     }
 
@@ -142,47 +151,57 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
                 labelFlores.Add(MapToFlores(words[i], labelPrefix));
         }
 
-        // --- Input matrix (quantized for .ftz) ---
+        // --- Input matrix: quantized (.ftz) or dense (.bin) ---
         bool qinput = br.ReadBoolean();
+
+        long inputM; float[]? dense = null;
+        int pqNsubq = 0, pqDsub = 0, pqLastDsub = 0;
+        float[] pqCentroids = [];
+        byte[] codes = [];
+        bool qnorm; float[]? normCentroids = null; byte[]? normCodes = null;
+
         if (!qinput)
-            throw new NotSupportedException("Non-quantized input matrix is not supported. Use the .ftz model.");
-
-        bool qnorm = br.ReadBoolean();
-        long inputM = br.ReadInt64(); // rows
-        long inputN = br.ReadInt64(); // cols (= dim)
-        int codesize = br.ReadInt32(); // total bytes = inputM * pqNsubq
-
-        // ProductQuantizer
-        int pqDimStored = br.ReadInt32();   // = dim
-        int pqNsubq = br.ReadInt32();
-        int pqDsub = br.ReadInt32();
-        int pqLastDsub = br.ReadInt32();
-        int centroidsCount = pqNsubq * KCENT * Math.Max(pqDsub, pqLastDsub);
-        var pqCentroids = new float[centroidsCount];
-        for (int i = 0; i < centroidsCount; i++)
-            pqCentroids[i] = br.ReadSingle();
-
-        var codes = br.ReadBytes(codesize);
-
-        // Norm quantizer (if qnorm)
-        float[]? normCentroids = null;
-        byte[]? normCodes = null;
-        if (qnorm)
         {
-            // norm ProductQuantizer: dim=1, nsubq=1, dsub=1, lastdsub=1, 256 floats
-            br.ReadInt32(); // dim=1
-            br.ReadInt32(); // nsubq=1
-            br.ReadInt32(); // dsub=1
-            br.ReadInt32(); // lastdsub=1
-            normCentroids = new float[KCENT];
-            for (int i = 0; i < KCENT; i++)
-                normCentroids[i] = br.ReadSingle();
-            normCodes = br.ReadBytes((int)inputM);
+            // Dense matrix — used by full-precision .bin models such as GlotLID
+            br.ReadBoolean(); // qnorm (ignored for dense; we don't quantize norms here)
+            qnorm = false;
+            inputM = br.ReadInt64();
+            long inputN = br.ReadInt64(); // = dim
+            dense = new float[inputM * inputN];
+            for (long i = 0; i < inputM * inputN; i++)
+                dense[i] = br.ReadSingle();
+        }
+        else
+        {
+            // Product-quantized matrix — used by .ftz compressed models
+            qnorm = br.ReadBoolean();
+            inputM = br.ReadInt64();
+            br.ReadInt64();                          // inputN = dim (already known)
+            int codesize = br.ReadInt32();           // total bytes = inputM * pqNsubq
+
+            br.ReadInt32();                          // pqDimStored (= dim)
+            pqNsubq = br.ReadInt32();
+            pqDsub = br.ReadInt32();
+            pqLastDsub = br.ReadInt32();
+            int centroidsCount = pqNsubq * KCENT * Math.Max(pqDsub, pqLastDsub);
+            pqCentroids = new float[centroidsCount];
+            for (int i = 0; i < centroidsCount; i++)
+                pqCentroids[i] = br.ReadSingle();
+            codes = br.ReadBytes(codesize);
+
+            if (qnorm)
+            {
+                br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // PQ header (dim=1)
+                normCentroids = new float[KCENT];
+                for (int i = 0; i < KCENT; i++)
+                    normCentroids[i] = br.ReadSingle();
+                normCodes = br.ReadBytes((int)inputM);
+            }
         }
 
         // --- Output matrix (full precision) ---
-        long outM = br.ReadInt64(); // nlabels
-        long outN = br.ReadInt64(); // dim
+        long outM = br.ReadInt64();
+        long outN = br.ReadInt64();
         var output = new float[outM * outN];
         for (long i = 0; i < outM * outN; i++)
             output[i] = br.ReadSingle();
@@ -192,6 +211,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             wordToId,
             pqNsubq, pqDsub, pqLastDsub, pqCentroids, codes, inputM,
             qnorm, normCentroids, normCodes,
+            dense,
             output, labelFlores.ToArray());
     }
 
@@ -287,6 +307,14 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     private void AddRowEmbedding(int rowIdx, float[] target)
     {
+        if (_dense != null)
+        {
+            int offset = rowIdx * _dim;
+            for (int k = 0; k < _dim; k++)
+                target[k] += _dense[offset + k];
+            return;
+        }
+
         int codeBase = rowIdx * _pqNsubq;
         int dimOffset = 0;
 

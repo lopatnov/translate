@@ -1,26 +1,24 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Downloads the OpenLID language identification model (MIT license).
+    Downloads the GlotLID v3 language identification model (Apache 2.0).
 .DESCRIPTION
-    Downloads the OpenLID compressed fastText model (~1.5 MB, MIT license)
-    from HuggingFace. Supports 201 languages.
+    Downloads the GlotLID model from HuggingFace (cis-lmu/glotlid-model).
+    Supports 1633 language varieties. License: Apache 2.0.
 
-    Reference: Burchell et al. (2023) "A Overwhelmingly Large Compendium of
-    Parallel Corpora". HuggingFace: laurieburchell/open-lid
-    License: MIT
+    Reference: Kargaran et al. (2023) "GlotLID: Language Identification for
+    Low-Resource Languages". https://huggingface.co/cis-lmu/glotlid-model
 
-    After download, set Models__LangDetect__Path in appsettings.json or
-    as an environment variable to the path printed at the end of this script.
+    After download, verify Models__LangDetect__Path in appsettings.json
+    points to the downloaded .bin file (path printed at the end).
 
 .EXAMPLE
     .\scripts\download-langdetect.ps1
     .\scripts\download-langdetect.ps1 -OutputDir ./models/langdetect
 #>
 param(
-    [string]$ModelRepo  = "laurieburchell/open-lid",
-    [string]$ModelFile  = "lid201-7.ftz",
-    [string]$OutputDir  = "./models/langdetect"
+    [string]$ModelRepo = "cis-lmu/glotlid-model",
+    [string]$OutputDir = "./models/langdetect"
 )
 
 Set-StrictMode -Version Latest
@@ -32,16 +30,22 @@ if (-not (Get-Command huggingface-cli -ErrorAction SilentlyContinue)) {
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
-$Dest = Join-Path $OutputDir $ModelFile
+Write-Host "[download] Fetching model files from $ModelRepo ..."
+huggingface-cli download $ModelRepo --local-dir $OutputDir --ignore-patterns "*.md" "*.txt"
 
-if (Test-Path $Dest) {
-    Write-Host "[skip] $ModelFile already exists at $Dest"
-} else {
-    Write-Host "[download] $ModelFile from $ModelRepo ..."
-    huggingface-cli download $ModelRepo $ModelFile --local-dir $OutputDir
-    $size = (Get-Item $Dest).Length
-    Write-Host "[done] $ModelFile saved ($([math]::Round($size/1KB, 1)) KB)"
+# Find the downloaded model file (.ftz preferred for size, fallback to .bin)
+$model = Get-ChildItem $OutputDir -Filter "*.ftz" | Select-Object -First 1
+if (-not $model) {
+    $model = Get-ChildItem $OutputDir -Filter "*.bin" | Select-Object -First 1
 }
 
+if (-not $model) {
+    Write-Warning "No .ftz or .bin file found in $OutputDir. Check what was downloaded:"
+    Get-ChildItem $OutputDir | ForEach-Object { Write-Host "  $($_.Name)" }
+    exit 1
+}
+
+$size = [math]::Round($model.Length / 1MB, 1)
+Write-Host "[done] Model: $($model.Name) ($size MB)"
 Write-Host "`nSet in appsettings.json or environment:"
-Write-Host "  Models__LangDetect__Path = $((Resolve-Path $Dest).Path)"
+Write-Host "  Models__LangDetect__Path = $((Resolve-Path $model.FullName).Path)"
