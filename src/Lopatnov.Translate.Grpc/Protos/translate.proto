@@ -7,6 +7,7 @@ option csharp_namespace = "Lopatnov.Translate.Grpc";
 service TranslateService {
   rpc TranslateText (TranslateTextRequest) returns (TranslateTextResponse);
   rpc TranslateLocalization (TranslateLocalizationRequest) returns (TranslateLocalizationResponse);
+  rpc DetectLanguage (DetectLanguageRequest) returns (DetectLanguageResponse);
   rpc TranscribeAudio (TranscribeAudioRequest) returns (TranscribeAudioResponse);
   rpc SynthesizeSpeech (SynthesizeSpeechRequest) returns (SynthesizeSpeechResponse);
   rpc TranslateAudio (TranslateAudioRequest) returns (TranslateAudioResponse);
@@ -25,6 +26,14 @@ message TranslateTextResponse {
   string translated_text = 1;
   string detected_language = 2;
   string provider_used = 3;
+}
+
+message DetectLanguageRequest {
+  string text = 1;
+}
+
+message DetectLanguageResponse {
+  string language = 1;  // FLORES-200 code, e.g. "ukr_Cyrl", "eng_Latn"
 }
 
 message TranslateLocalizationRequest {

@@ -93,6 +93,17 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
     }
 
+    public override Task<DetectLanguageResponse> DetectLanguage(
+        DetectLanguageRequest request, ServerCallContext context)
+    {
+        if (_detector is null)
+            throw new RpcException(new Status(StatusCode.Unavailable,
+                "Language detection is not configured. Set Models:LangDetect:Path."));
+
+        var language = _detector.Detect(request.Text);
+        return Task.FromResult(new DetectLanguageResponse { Language = language });
+    }
+
     public override Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));
