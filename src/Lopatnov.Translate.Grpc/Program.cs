@@ -19,13 +19,19 @@ builder.Services.AddOptions<LangDetectOptions>()
 builder.Services.AddSingleton<ILanguageDetector>(sp =>
 {
     var path = sp.GetRequiredService<IOptions<LangDetectOptions>>().Value.Path;
-    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+    var log = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
+    if (string.IsNullOrWhiteSpace(path))
     {
-        var logger = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
-        logger.LogInformation("Loading FastText LID model from {Path}", path);
-        return FastTextLanguageDetector.Load(path);
+        log.LogInformation("Models:LangDetect:Path is empty — auto-detection disabled");
+        return null!;
     }
-    return new HeuristicLanguageDetector();
+    if (!File.Exists(path))
+    {
+        log.LogWarning("LangDetect model not found at {Path} — auto-detection disabled", path);
+        return null!;
+    }
+    log.LogInformation("Loading LangDetect model from {Path}", path);
+    return FastTextLanguageDetector.Load(path);
 });
 
 // --- Provider allowlist + TTL ---

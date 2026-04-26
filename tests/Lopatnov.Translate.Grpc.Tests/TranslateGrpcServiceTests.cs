@@ -7,7 +7,8 @@ namespace Lopatnov.Translate.Grpc.Tests;
 
 public sealed class TranslateGrpcServiceTests
 {
-    private static readonly ILanguageDetector NoOpDetector = new Mock<ILanguageDetector>().Object;
+    private static readonly IEnumerable<ILanguageDetector> NoDetector = [];
+    private static IEnumerable<ILanguageDetector> WithDetector(ILanguageDetector d) => [d];
 
     private static ModelSessionManager SingleProviderManager(string key, ITextTranslator translator)
         => new(
@@ -25,7 +26,7 @@ public sealed class TranslateGrpcServiceTests
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("translated");
 
-        var svc = new TranslateGrpcService(SingleProviderManager(provider, mockTranslator.Object), NoOpDetector);
+        var svc = new TranslateGrpcService(SingleProviderManager(provider, mockTranslator.Object), NoDetector);
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -48,7 +49,7 @@ public sealed class TranslateGrpcServiceTests
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("translated");
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoOpDetector);
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector);
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -65,7 +66,7 @@ public sealed class TranslateGrpcServiceTests
     [Fact]
     public async Task TranslateText_ThrowsInvalidArgument_ForUnknownProvider()
     {
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoOpDetector);
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoDetector);
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
@@ -87,7 +88,7 @@ public sealed class TranslateGrpcServiceTests
             allowedProviders: ["nllb"],
             ttl: TimeSpan.FromMinutes(30));
 
-        var svc = new TranslateGrpcService(manager, NoOpDetector);
+        var svc = new TranslateGrpcService(manager, NoDetector);
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
@@ -97,6 +98,20 @@ public sealed class TranslateGrpcServiceTests
             }, ctx.Object));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("auto")]
+    public async Task TranslateText_ThrowsInvalidArgument_WhenAutoAndNoDetector(string sourceLanguage)
+    {
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoDetector);
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateText(new TranslateTextRequest { Text = "hello", SourceLanguage = sourceLanguage, Provider = "nllb" }, ctx.Object));
+
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
 
     [Theory]
@@ -113,7 +128,7 @@ public sealed class TranslateGrpcServiceTests
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("hello")).Returns("ukr_Cyrl");
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), mockDetector.Object);
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object));
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -138,7 +153,7 @@ public sealed class TranslateGrpcServiceTests
 
         var mockDetector = new Mock<ILanguageDetector>();
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), mockDetector.Object);
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object));
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest

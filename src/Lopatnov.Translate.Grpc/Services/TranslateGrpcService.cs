@@ -9,12 +9,13 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private const string DefaultProvider = "nllb";
     private readonly ModelSessionManager _manager;
-    private readonly ILanguageDetector _detector;
+    private readonly ILanguageDetector? _detector; // null = auto-detection disabled
 
-    public TranslateGrpcService(ModelSessionManager manager, ILanguageDetector detector)
+    // IEnumerable<ILanguageDetector> is empty when the service isn't registered or resolved to null.
+    public TranslateGrpcService(ModelSessionManager manager, IEnumerable<ILanguageDetector> detectors)
     {
         _manager = manager;
-        _detector = detector;
+        _detector = detectors.FirstOrDefault(d => d is not null);
     }
 
     public override async Task<TranslateTextResponse> TranslateText(
@@ -28,6 +29,11 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         if (string.IsNullOrWhiteSpace(sourceLanguage) ||
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
+            if (_detector is null)
+                throw new RpcException(new Status(StatusCode.InvalidArgument,
+                    "source_language is required — language auto-detection is not configured. " +
+                    "Set Models:LangDetect:Path to enable it."));
+
             detectedLanguage = _detector.Detect(request.Text);
             sourceLanguage = detectedLanguage;
         }
