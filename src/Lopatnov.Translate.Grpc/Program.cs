@@ -13,7 +13,20 @@ builder.Services.AddGrpc();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
-builder.Services.AddSingleton<ILanguageDetector, HeuristicLanguageDetector>();
+// --- Language detector: FastText LID-176 if model exists, heuristic fallback ---
+builder.Services.AddOptions<LangDetectOptions>()
+    .Bind(builder.Configuration.GetSection("Models:LangDetect"));
+builder.Services.AddSingleton<ILanguageDetector>(sp =>
+{
+    var path = sp.GetRequiredService<IOptions<LangDetectOptions>>().Value.Path;
+    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+    {
+        var logger = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
+        logger.LogInformation("Loading FastText LID model from {Path}", path);
+        return FastTextLanguageDetector.Load(path);
+    }
+    return new HeuristicLanguageDetector();
+});
 
 // --- Provider allowlist + TTL ---
 builder.Services.AddOptions<AllowedProvidersOptions>()
