@@ -52,11 +52,11 @@ public sealed class ModelSessionManager : IDisposable
 
     public ModelSessionManager(
         IReadOnlyDictionary<string, Func<ITextTranslator>> factories,
-        IEnumerable<string> allowedProviders,
+        IEnumerable<string> allowedModels,
         TimeSpan ttl)
     {
         _factories = new Dictionary<string, Func<ITextTranslator>>(factories, StringComparer.OrdinalIgnoreCase);
-        _allowed = new HashSet<string>(allowedProviders, StringComparer.OrdinalIgnoreCase);
+        _allowed = new HashSet<string>(allowedModels, StringComparer.OrdinalIgnoreCase);
         _ttl = ttl;
         var interval = ttl < TimeSpan.FromMinutes(1) ? TimeSpan.FromMinutes(1) : ttl;
         _evictionTimer = new Timer(_ => Evict(), null, interval, interval);
@@ -89,9 +89,9 @@ public sealed class ModelSessionManager : IDisposable
     }
 
     /// <summary>
-    /// Returns the keys of providers that are configured and not blocked by the allowlist.
+    /// Returns the keys of models that are configured and not blocked by the allowlist.
     /// </summary>
-    public IReadOnlyList<string> GetAvailableProviders()
+    public IReadOnlyList<string> GetAvailableModels()
     {
         var keys = _factories.Keys;
         return (_allowed.Count == 0 ? keys : keys.Where(k => _allowed.Contains(k))).ToArray();

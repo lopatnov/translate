@@ -1,27 +1,31 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace Lopatnov.Translate.Grpc.Services;
 
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
-    private const string DefaultProvider = "nllb";
     private readonly ModelSessionManager _manager;
-    private readonly ILanguageDetector? _detector; // null = auto-detection disabled
+    private readonly ILanguageDetector _detector;
+    private readonly string _defaultModel;
 
-    // IEnumerable<ILanguageDetector> is empty when the service isn't registered or resolved to null.
-    public TranslateGrpcService(ModelSessionManager manager, IEnumerable<ILanguageDetector> detectors)
+    public TranslateGrpcService(
+        ModelSessionManager manager,
+        ILanguageDetector detector,
+        IOptions<TranslationOptions> translationOptions)
     {
         _manager = manager;
-        _detector = detectors.FirstOrDefault(d => d is not null);
+        _detector = detector;
+        _defaultModel = translationOptions.Value.DefaultModel;
     }
 
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var (translator, providerKey) = ResolveTranslator(request.Provider);
+        var (translator, providerKey) = ResolveTranslator(request.Model);
 
         var sourceLanguage = request.SourceLanguage;
         string? detectedLanguage = null;
@@ -29,11 +33,6 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         if (string.IsNullOrWhiteSpace(sourceLanguage) ||
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            if (_detector is null)
-                throw new RpcException(new Status(StatusCode.InvalidArgument,
-                    "source_language is required — language auto-detection is not configured. " +
-                    "Set Models:LangDetect:Path to enable it."));
-
             detectedLanguage = _detector.Detect(request.Text);
             sourceLanguage = detectedLanguage;
         }
@@ -48,7 +47,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             TranslatedText = translated,
             DetectedLanguage = detectedLanguage ?? string.Empty,
-            ProviderUsed = providerKey,
+            ModelUsed = providerKey,
         };
     }
 
@@ -60,7 +59,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             SttAvailable = false,
             TtsAvailable = false,
         };
-        response.AvailableProviders.AddRange(_manager.GetAvailableProviders());
+        response.AvailableModels.AddRange(_manager.GetAvailableModels());
         response.SupportedLanguages.AddRange([
             Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
             Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
@@ -72,7 +71,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateLocalizationResponse> TranslateLocalization(
         TranslateLocalizationRequest request, ServerCallContext context)
     {
-        var (translator, _) = ResolveTranslator(request.Provider);
+        var (translator, _) = ResolveTranslator(request.Model);
 
         try
         {
@@ -96,10 +95,6 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override Task<DetectLanguageResponse> DetectLanguage(
         DetectLanguageRequest request, ServerCallContext context)
     {
-        if (_detector is null)
-            throw new RpcException(new Status(StatusCode.Unavailable,
-                "Language detection is not configured. Set Models:LangDetect:Path."));
-
         var language = _detector.Detect(request.Text);
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
@@ -118,7 +113,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
     private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
     {
-        var key = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
+        var key = string.IsNullOrWhiteSpace(provider) ? _defaultModel : provider.Trim();
         try
         {
             return (_manager.Get(key), key);

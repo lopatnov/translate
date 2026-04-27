@@ -8,15 +8,13 @@ services:
       - "5100:5100"
     volumes:
       - ../models:/app/models:ro
+      - ../src/Lopatnov.Translate.Grpc/appsettings.json:/app/src/Lopatnov.Translate.Grpc/appsettings.json:ro
     environment:
       - DOTNET_CLI_TELEMETRY_OPTOUT=1
       - DOTNET_NOLOGO=1
-      - Models__Nllb__Path=${Models__Nllb__Path:-/app/models/nllb}
-      - LibreTranslate__BaseUrl=${LibreTranslate__BaseUrl:-http://libretranslate:5000}
-      - LibreTranslate__ApiKey=${LibreTranslate__ApiKey:-}
-    depends_on:
-      libretranslate:
-        condition: service_healthy
+    # depends_on:
+    #   libretranslate:
+    #     condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -24,29 +22,31 @@ services:
           memory: 8g    # NLLB 600M float32 ~4 GB; 1.3B ~8 GB
           cpus: '2.0'
 
-  libretranslate:
-    image: libretranslate/libretranslate:v1.9.5
-    user: "0"
-    ports:
-      - "5000:5000"
-    volumes:
-      - libretranslate-models:/data/argos-packages
-    environment:
-      - ARGOS_PACKAGES_DIR=/data/argos-packages
-      # Load only the languages declared in Language.cs to reduce startup time and memory.
-      - LT_LOAD_ONLY=en,uk,ru,de,fr,es,pl,zh,ja,ar
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-      start_period: 600s   # first run downloads ~3 GB of models
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4g    # ~300 MB per language; 10 languages ~3 GB
-          cpus: '1.0'
+  # Uncomment to enable LibreTranslate fallback.
+  # Add a "libretranslate" entry under Models in appsettings.json with BaseUrl and ApiKey.
+  # libretranslate:
+  #   image: libretranslate/libretranslate:v1.9.5
+  #   user: "0"
+  #   ports:
+  #     - "5000:5000"
+  #   volumes:
+  #     - libretranslate-models:/data/argos-packages
+  #   environment:
+  #     - ARGOS_PACKAGES_DIR=/data/argos-packages
+  #     # Load only the languages declared in Language.cs to reduce startup time and memory.
+  #     - LT_LOAD_ONLY=en,uk,ru,de,fr,es,pl,zh,ja,ar
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 8
+  #     start_period: 600s   # first run downloads ~3 GB of models
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 4g    # ~300 MB per language; 10 languages ~3 GB
+  #         cpus: '1.0'
 
-volumes:
-  libretranslate-models:
+# volumes:
+#   libretranslate-models:

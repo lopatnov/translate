@@ -48,5 +48,23 @@ if (-not $model) {
 $size = [math]::Round($model.Length / 1MB, 1)
 Write-Host "[done] $($model.Name)  ($size MB)"
 Write-Host ""
-Write-Host "Set in appsettings.json or environment:"
-Write-Host "  Models__LangDetect__Path = $((Resolve-Path $model.FullName).Path)"
+Write-Host "Set in appsettings.json under Models:<name>:"
+Write-Host "  { ""Model"": ""GlotLID"", ""Path"": ""$((Resolve-Path $model.FullName).Path)"" }"
+
+# -------------------------------------------------------------------------
+# Optional: LID-176 (Facebook, CC-BY-SA-3.0, ~917 KB compressed)
+# A smaller, faster alternative supporting 176 languages.
+# Use Model: "LID-176" in appsettings.json.
+# -------------------------------------------------------------------------
+$lid176Path = Join-Path $OutputDir "lid.176.ftz"
+if (-not (Test-Path $lid176Path)) {
+    Write-Host ""
+    $downloadLid = Read-Host "Download LID-176 as well? (lid.176.ftz, ~917 KB) [y/N]"
+    if ($downloadLid -eq "y" -or $downloadLid -eq "Y") {
+        Write-Host "[download] lid.176.ftz → $lid176Path"
+        Invoke-WebRequest -Uri "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz" `
+            -OutFile $lid176Path
+        Write-Host "[done] lid.176.ftz  ($([math]::Round((Get-Item $lid176Path).Length / 1KB, 0)) KB)"
+        Write-Host "  { ""Model"": ""LID-176"", ""Path"": ""$((Resolve-Path $lid176Path).Path)"" }"
+    }
+}

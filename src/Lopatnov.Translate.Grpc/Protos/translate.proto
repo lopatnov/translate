@@ -18,14 +18,14 @@ message TranslateTextRequest {
   string text = 1;
   string source_language = 2;
   string target_language = 3;
-  string provider = 4;
-  string context = 5;  // optional: free-form hint for the translation (reserved for LLM-based providers)
+  string model = 4;    // name of the model entry from config (e.g. "nllb"); empty = default model
+  string context = 5;  // optional: free-form hint for the translation (reserved for LLM-based models)
 }
 
 message TranslateTextResponse {
   string translated_text = 1;
   string detected_language = 2;
-  string provider_used = 3;
+  string model_used = 3;
 }
 
 message DetectLanguageRequest {
@@ -40,9 +40,9 @@ message TranslateLocalizationRequest {
   string json = 1;
   string source_language = 2;
   string target_language = 3;
-  string provider = 4;
+  string model = 4;                 // name of the model entry from config; empty = default model
   string existing_translation = 5;  // optional: same-structure JSON with already-translated values; matching keys are reused as-is
-  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based providers)
+  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based models)
 }
 
 message TranslateLocalizationResponse {
@@ -100,7 +100,7 @@ message GetCapabilitiesRequest {}
 message GetCapabilitiesResponse {
   repeated string supported_languages = 1;
   repeated string available_voices = 2;
-  repeated string available_providers = 3;
+  repeated string available_models = 3;
   bool stt_available = 4;
   bool tts_available = 5;
 }

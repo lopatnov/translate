@@ -13,83 +13,142 @@ builder.Services.AddGrpc();
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
-// --- Language detector: FastText LID-176 if model exists, heuristic fallback ---
-builder.Services.AddOptions<LangDetectOptions>()
-    .Bind(builder.Configuration.GetSection("Models:LangDetect"));
-builder.Services.AddSingleton<ILanguageDetector>(sp =>
+string ResolvePath(string path) =>
+    string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) ? path :
+    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, path));
+
+// --- Read and validate named model registry ---
+var rawModels = builder.Configuration.GetSection("Models").GetChildren()
+    .ToDictionary(s => s.Key, s => s.Get<ModelConfig>() ?? new(), StringComparer.OrdinalIgnoreCase);
+
+foreach (var (name, cfg) in rawModels)
 {
-    var path = sp.GetRequiredService<IOptions<LangDetectOptions>>().Value.Path;
-    var log = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
-    if (string.IsNullOrWhiteSpace(path))
-    {
-        log.LogInformation("Models:LangDetect:Path is empty — auto-detection disabled");
-        return null!;
-    }
-    if (!File.Exists(path))
-    {
-        log.LogWarning("LangDetect model not found at {Path} — auto-detection disabled", path);
-        return null!;
-    }
-    log.LogInformation("Loading LangDetect model from {Path}", path);
-    try
-    {
-        return FastTextLanguageDetector.Load(path);
-    }
-    catch (Exception ex)
-    {
-        log.LogError(ex, "Failed to load LangDetect model from {Path} — auto-detection disabled", path);
-        return null!;
-    }
-});
+    if (string.IsNullOrWhiteSpace(cfg.Model))
+        throw new InvalidOperationException(
+            $"Configuration error: Models:{name}:Model is required.");
+    if (!ModelType.IsKnown(cfg.Model))
+        throw new InvalidOperationException(
+            $"Configuration error: Models:{name}:Model value '{cfg.Model}' is unknown. " +
+            "Known: NLLB, M2M100, GlotLID, LID-176, LibreTranslate.");
+}
 
-// --- Provider allowlist + TTL ---
-builder.Services.AddOptions<AllowedProvidersOptions>()
-    .Bind(builder.Configuration.GetSection("Translation"));
+// --- Validate Translation references ---
+var translationSection = builder.Configuration.GetSection("Translation");
+var defaultModel = translationSection["DefaultModel"] ?? string.Empty;
+var allowedModels = translationSection.GetSection("AllowedModels").Get<string[]>() ?? [];
 
-// --- NLLB (always registered) ---
-builder.Services.AddOptions<NllbOptions>()
-    .Bind(builder.Configuration.GetSection("Models:Nllb"))
+if (!string.IsNullOrWhiteSpace(defaultModel) && !rawModels.ContainsKey(defaultModel))
+    throw new InvalidOperationException(
+        $"Configuration error: Translation:DefaultModel '{defaultModel}' is not defined in Models.");
+
+foreach (var modelName in allowedModels)
+{
+    if (!rawModels.ContainsKey(modelName))
+        throw new InvalidOperationException(
+            $"Configuration error: Translation:AllowedModels contains '{modelName}' which is not defined in Models.");
+}
+
+// --- Register named HttpClients for LibreTranslate entries ---
+foreach (var (name, cfg) in rawModels.Where(kv =>
+    kv.Value.Model.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
+    !string.IsNullOrWhiteSpace(kv.Value.BaseUrl)))
+{
+    var capturedUrl = cfg.BaseUrl;
+    builder.Services.AddHttpClient(name, c => c.BaseAddress = new Uri(capturedUrl));
+}
+
+// --- Translation options ---
+builder.Services.AddOptions<TranslationOptions>()
+    .Bind(builder.Configuration.GetSection("Translation"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// --- M2M-100 (always registered; factory is skipped when Path is blank) ---
-builder.Services.AddOptions<M2M100Options>()
-    .Bind(builder.Configuration.GetSection("Models:M2M100"));
-
-// --- LibreTranslate (registered only if BaseUrl is configured) ---
-var libreTranslateUrl = builder.Configuration["LibreTranslate:BaseUrl"];
-if (!string.IsNullOrWhiteSpace(libreTranslateUrl))
+// --- Language detector: from Translation:AutoDetect, null fallback otherwise ---
+var autoDetectName = builder.Configuration["Translation:AutoDetect"] ?? string.Empty;
+builder.Services.AddSingleton<ILanguageDetector>(sp =>
 {
-    builder.Services.AddOptions<LibreTranslateOptions>()
-        .Bind(builder.Configuration.GetSection("LibreTranslate"))
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
-    builder.Services.AddHttpClient<LibreTranslateClient>((sp, c) =>
-        c.BaseAddress = new Uri(sp.GetRequiredService<IOptions<LibreTranslateOptions>>().Value.BaseUrl!));
-}
+    var log = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
+    if (string.IsNullOrWhiteSpace(autoDetectName))
+    {
+        sp.GetRequiredService<ILogger<Program>>()
+          .LogInformation("Translation:AutoDetect is empty — using heuristic language detector");
+        return new HeuristicLanguageDetector();
+    }
+    if (!rawModels.TryGetValue(autoDetectName, out var cfg))
+    {
+        sp.GetRequiredService<ILogger<Program>>()
+          .LogError("Translation:AutoDetect references unknown model '{Name}' — using heuristic language detector", autoDetectName);
+        return new HeuristicLanguageDetector();
+    }
+    var modelPath = ResolvePath(cfg.Path);
+    if (string.IsNullOrWhiteSpace(modelPath) || !File.Exists(modelPath))
+    {
+        log.LogWarning("LangDetect model '{Name}' not found at {Path} — using heuristic language detector",
+            autoDetectName, modelPath);
+        return new HeuristicLanguageDetector();
+    }
+    log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
+        autoDetectName, cfg.Model, modelPath);
+    try
+    {
+        return FastTextLanguageDetector.Load(modelPath);
+    }
+    catch (Exception ex)
+    {
+        log.LogError(ex, "Failed to load LangDetect '{Name}' — using heuristic language detector", autoDetectName);
+        return new HeuristicLanguageDetector();
+    }
+});
 
 // --- ModelSessionManager: lazy init + TTL eviction ---
 builder.Services.AddSingleton<ModelSessionManager>(sp =>
 {
     var factories = new Dictionary<string, Func<ITextTranslator>>(StringComparer.OrdinalIgnoreCase);
 
-    factories["nllb"] = () => new NllbTranslator(sp.GetRequiredService<IOptions<NllbOptions>>());
-
-    var m2m100Path = sp.GetRequiredService<IOptions<M2M100Options>>().Value.Path;
-    if (!string.IsNullOrWhiteSpace(m2m100Path))
-        factories["m2m100"] = () => new M2M100Translator(sp.GetRequiredService<IOptions<M2M100Options>>());
-
-    if (!string.IsNullOrWhiteSpace(libreTranslateUrl))
+    foreach (var (name, cfg) in rawModels)
     {
-        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-        var libreOpts = sp.GetRequiredService<IOptions<LibreTranslateOptions>>();
-        factories["libretranslate"] = () =>
-            new LibreTranslateClient(
-                httpClientFactory.CreateClient(nameof(LibreTranslateClient)), libreOpts);
+        var c = cfg;
+        var n = name;
+
+        if (c.Model.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
+        {
+            factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
+            {
+                Path = ResolvePath(c.Path),
+                EncoderFile = c.EncoderFile,
+                DecoderFile = c.DecoderFile,
+                TokenizerFile = c.TokenizerFile,
+                TokenizerConfigFile = c.TokenizerConfigFile,
+                MaxTokens = c.MaxTokens,
+                BeamSize = c.BeamSize,
+            }));
+        }
+        else if (c.Model.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase) &&
+                 !string.IsNullOrWhiteSpace(c.Path))
+        {
+            factories[n] = () => new M2M100Translator(Options.Create(new M2M100Options
+            {
+                Path = ResolvePath(c.Path),
+                EncoderFile = c.EncoderFile,
+                DecoderFile = c.DecoderFile,
+                TokenizerFile = c.TokenizerFile,
+                TokenizerConfigFile = c.TokenizerConfigFile,
+                MaxTokens = c.MaxTokens,
+                VocabFile = c.VocabFile,
+            }));
+        }
+        else if (c.Model.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
+                 !string.IsNullOrWhiteSpace(c.BaseUrl))
+        {
+            var httpFac = sp.GetRequiredService<IHttpClientFactory>();
+            factories[n] = () => new LibreTranslateClient(
+                httpFac.CreateClient(n),
+                Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
+        }
     }
 
-    var opts = sp.GetRequiredService<IOptions<AllowedProvidersOptions>>().Value;
-    return new ModelSessionManager(factories, opts.AllowedProviders, TimeSpan.FromMinutes(opts.ModelTtlMinutes));
+    var opts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
+    return new ModelSessionManager(factories, opts.AllowedModels, TimeSpan.FromMinutes(opts.ModelTtlMinutes));
 });
 
 var app = builder.Build();

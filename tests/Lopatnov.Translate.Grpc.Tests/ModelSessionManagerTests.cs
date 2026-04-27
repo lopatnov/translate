@@ -75,12 +75,12 @@ public sealed class ModelSessionManagerTests
     }
 
     [Fact]
-    public void GetAvailableProviders_ReturnsAll_WhenNoAllowlist()
+    public void GetAvailableModels_ReturnsAll_WhenNoAllowlist()
     {
         var mock = new Mock<ITextTranslator>();
         using var mgr = Build(new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object });
 
-        var providers = mgr.GetAvailableProviders();
+        var providers = mgr.GetAvailableModels();
 
         Assert.Contains("nllb", providers);
         Assert.Contains("m2m100", providers);
@@ -88,14 +88,14 @@ public sealed class ModelSessionManagerTests
     }
 
     [Fact]
-    public void GetAvailableProviders_ReturnsOnlyAllowed_WhenAllowlistSet()
+    public void GetAvailableModels_ReturnsOnlyAllowed_WhenAllowlistSet()
     {
         var mock = new Mock<ITextTranslator>();
         using var mgr = Build(
             new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object, ["libretranslate"] = () => mock.Object },
             allowed: ["nllb", "libretranslate"]);
 
-        var providers = mgr.GetAvailableProviders();
+        var providers = mgr.GetAvailableModels();
 
         Assert.Contains("nllb", providers);
         Assert.Contains("libretranslate", providers);

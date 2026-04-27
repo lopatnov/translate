@@ -29,7 +29,7 @@ internal sealed class IntegrationTheoryAttribute : TheoryAttribute
 public sealed class FastTextDetectorFixture
 {
     internal static readonly string ModelPath =
-        Environment.GetEnvironmentVariable("Models__LangDetect__Path")
+        Environment.GetEnvironmentVariable("TEST_LANGDETECT_MODEL_PATH")
         ?? Path.GetFullPath(
                Path.Combine(AppContext.BaseDirectory, "../../../../../models/langdetect/model_v3.bin"));
 
