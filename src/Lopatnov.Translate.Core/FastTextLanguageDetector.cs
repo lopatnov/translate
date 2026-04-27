@@ -46,7 +46,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     private readonly byte[]? _normCodes;       // inputRows bytes
 
     // --- dense input matrix (.bin models, e.g. GlotLID) ---
-    private readonly float[]? _dense; // non-null when qinput=false; inputRows * dim floats
+    private readonly float[][]? _dense; // non-null when qinput=false; jagged [inputRows][dim]
 
     // --- output matrix (full precision) ---
     private readonly float[] _output;  // nlabels * dim (row-major)
@@ -59,7 +59,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         Dictionary<string, int> wordToId,
         int pqNsubq, int pqDsub, int pqLastDsub, float[] pqCentroids, byte[] codes, long inputRows,
         bool qnorm, float[]? normCentroids, byte[]? normCodes,
-        float[]? dense,
+        float[][]? dense,
         float[] output, string[] labels)
     {
         _dim = dim; _minn = minn; _maxn = maxn; _bucket = bucket; _nwords = nwords; _labelPrefix = labelPrefix;
@@ -85,25 +85,51 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             throw new InvalidDataException($"Unsupported fastText version {version}.");
 
         // --- Args ---
-        br.ReadDouble();           // lr
-        br.ReadInt32();            // lrUpdateRate
-        int dim = br.ReadInt32();
-        br.ReadInt32();            // ws
-        br.ReadInt32();            // epoch
-        br.ReadInt32();            // minCount
-        br.ReadInt32();            // neg
-        int wordNgrams = br.ReadInt32();
-        br.ReadInt32();            // loss
-        br.ReadInt32();            // model
-        int bucket = br.ReadInt32();
-        int minn = br.ReadInt32();
-        int maxn = br.ReadInt32();
-        br.ReadDouble();           // t
-        int labelLen = (int)br.ReadUInt32();
-        string labelPrefix = Encoding.UTF8.GetString(br.ReadBytes(labelLen));
-        br.ReadInt32();            // verbose
-        int pretrainedLen = (int)br.ReadUInt32();
-        br.ReadBytes(pretrainedLen); // pretrainedVectors path (ignored)
+        // GlotLID models omit lr/lrUpdateRate and end Args after t (no verbose/pretrainedVectors).
+        // Standard fastText includes lr (double), lrUpdateRate (int32), verbose, and pretrainedVectors.
+        // Detect by reading the first double: a valid lr is in (1e-100, 100); near-zero → GlotLID format.
+        double lr = br.ReadDouble();
+        bool isStandardFormat = lr is > 1e-100 and < 100.0;
+
+        int dim, minn, maxn, bucket;
+        if (isStandardFormat)
+        {
+            br.ReadInt32();            // lrUpdateRate
+            dim = br.ReadInt32();
+            br.ReadInt32();            // ws
+            br.ReadInt32();            // epoch
+            br.ReadInt32();            // minCount
+            br.ReadInt32();            // neg
+            br.ReadInt32();            // wordNgrams
+            br.ReadInt32();            // loss
+            br.ReadInt32();            // model
+            bucket = br.ReadInt32();
+            minn = br.ReadInt32();
+            maxn = br.ReadInt32();
+            br.ReadDouble();           // t
+            br.ReadInt32();            // verbose
+            br.ReadBytes((int)br.ReadUInt32()); // pretrainedVectors path (ignored)
+        }
+        else
+        {
+            // GlotLID format: no lr/lrUpdateRate; has extra int32 (thread count) before t.
+            br.BaseStream.Seek(8, SeekOrigin.Begin);
+            dim = br.ReadInt32();
+            br.ReadInt32();            // ws
+            br.ReadInt32();            // epoch
+            br.ReadInt32();            // minCount
+            br.ReadInt32();            // neg
+            br.ReadInt32();            // wordNgrams
+            br.ReadInt32();            // loss
+            br.ReadInt32();            // model
+            bucket = br.ReadInt32();
+            minn = br.ReadInt32();
+            maxn = br.ReadInt32();
+            br.ReadInt32();            // thread count (training-only, not used for inference)
+            br.ReadDouble();           // t
+        }
+
+        const string labelPrefix = "__label__";
 
         // --- Dictionary ---
         int size = br.ReadInt32();
@@ -154,7 +180,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         // --- Input matrix: quantized (.ftz) or dense (.bin) ---
         bool qinput = br.ReadBoolean();
 
-        long inputM; float[]? dense = null;
+        long inputM; float[][]? dense = null;
         int pqNsubq = 0, pqDsub = 0, pqLastDsub = 0;
         float[] pqCentroids = [];
         byte[] codes = [];
@@ -163,13 +189,18 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         if (!qinput)
         {
             // Dense matrix — used by full-precision .bin models such as GlotLID
-            br.ReadBoolean(); // qnorm (ignored for dense; we don't quantize norms here)
+            // DenseMatrix::save writes only m, n, data — no qnorm field
             qnorm = false;
             inputM = br.ReadInt64();
             long inputN = br.ReadInt64(); // = dim
-            dense = new float[inputM * inputN];
-            for (long i = 0; i < inputM * inputN; i++)
-                dense[i] = br.ReadSingle();
+            dense = new float[inputM][];
+            for (long row = 0; row < inputM; row++)
+            {
+                var r = new float[inputN];
+                for (long k = 0; k < inputN; k++)
+                    r[k] = br.ReadSingle();
+                dense[row] = r;
+            }
         }
         else
         {
@@ -200,6 +231,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         }
 
         // --- Output matrix (full precision) ---
+        br.ReadBoolean(); // output matrix quant flag (always false; mirrors the per-matrix bool before input)
         long outM = br.ReadInt64();
         long outN = br.ReadInt64();
         var output = new float[outM * outN];
@@ -309,9 +341,9 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     {
         if (_dense != null)
         {
-            int offset = rowIdx * _dim;
+            float[] row = _dense[rowIdx];
             for (int k = 0; k < _dim; k++)
-                target[k] += _dense[offset + k];
+                target[k] += row[k];
             return;
         }
 

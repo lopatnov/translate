@@ -31,7 +31,15 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         return null!;
     }
     log.LogInformation("Loading LangDetect model from {Path}", path);
-    return FastTextLanguageDetector.Load(path);
+    try
+    {
+        return FastTextLanguageDetector.Load(path);
+    }
+    catch (Exception ex)
+    {
+        log.LogError(ex, "Failed to load LangDetect model from {Path} — auto-detection disabled", path);
+        return null!;
+    }
 });
 
 // --- Provider allowlist + TTL ---

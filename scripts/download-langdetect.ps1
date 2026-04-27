@@ -3,18 +3,11 @@
 .SYNOPSIS
     Downloads the GlotLID v3 language identification model (Apache 2.0).
 .DESCRIPTION
-    Downloads the GlotLID model from HuggingFace (cis-lmu/glotlid-model).
+    Downloads GlotLID from cis-lmu/glotlid-model via huggingface-cli or hf.
     Supports 1633 language varieties. License: Apache 2.0.
 
     Reference: Kargaran et al. (2023) "GlotLID: Language Identification for
     Low-Resource Languages". https://huggingface.co/cis-lmu/glotlid-model
-
-    After download, verify Models__LangDetect__Path in appsettings.json
-    points to the downloaded .bin file (path printed at the end).
-
-.EXAMPLE
-    .\scripts\download-langdetect.ps1
-    .\scripts\download-langdetect.ps1 -OutputDir ./models/langdetect
 #>
 param(
     [string]$ModelRepo = "cis-lmu/glotlid-model",
@@ -24,28 +17,36 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if (-not (Get-Command huggingface-cli -ErrorAction SilentlyContinue)) {
-    Write-Error "huggingface-cli not found. Install with: pip install 'huggingface_hub[cli]'"
-}
+# Detect available HuggingFace CLI
+$hfCmd = if     (Get-Command huggingface-cli -ErrorAction SilentlyContinue) { "huggingface-cli" }
+         elseif (Get-Command hf              -ErrorAction SilentlyContinue) { "hf" }
+         else   { Write-Error "HuggingFace CLI not found. Install: pip install 'huggingface_hub[cli]'"; exit 1 }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
-Write-Host "[download] Fetching model files from $ModelRepo ..."
-huggingface-cli download $ModelRepo --local-dir $OutputDir --ignore-patterns "*.md" "*.txt"
+Write-Host "[download] $ModelRepo → $OutputDir  (using $hfCmd)"
 
-# Find the downloaded model file (.ftz preferred for size, fallback to .bin)
-$model = Get-ChildItem $OutputDir -Filter "*.ftz" | Select-Object -First 1
-if (-not $model) {
-    $model = Get-ChildItem $OutputDir -Filter "*.bin" | Select-Object -First 1
+if ($hfCmd -eq "huggingface-cli") {
+    huggingface-cli download $ModelRepo --local-dir $OutputDir `
+        --ignore-patterns "*.md" "*.txt" "*.json"
+} else {
+    # hf uses --exclude (repeatable) instead of --ignore-patterns
+    hf download $ModelRepo --local-dir $OutputDir `
+        --exclude "*.md" --exclude "*.txt" --exclude "*.json"
 }
 
+# Find the downloaded model file
+$model = Get-ChildItem $OutputDir -Filter "*.ftz" -Recurse | Select-Object -First 1
+if (-not $model) { $model = Get-ChildItem $OutputDir -Filter "*.bin" -Recurse | Select-Object -First 1 }
+
 if (-not $model) {
-    Write-Warning "No .ftz or .bin file found in $OutputDir. Check what was downloaded:"
-    Get-ChildItem $OutputDir | ForEach-Object { Write-Host "  $($_.Name)" }
+    Write-Warning "No .ftz or .bin file found. Files downloaded:"
+    Get-ChildItem $OutputDir -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
     exit 1
 }
 
 $size = [math]::Round($model.Length / 1MB, 1)
-Write-Host "[done] Model: $($model.Name) ($size MB)"
-Write-Host "`nSet in appsettings.json or environment:"
+Write-Host "[done] $($model.Name)  ($size MB)"
+Write-Host ""
+Write-Host "Set in appsettings.json or environment:"
 Write-Host "  Models__LangDetect__Path = $((Resolve-Path $model.FullName).Path)"

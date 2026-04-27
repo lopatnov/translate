@@ -9,7 +9,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Models__Nllb__Path": "../../models/nllb",
-        "Models__M2M100__Path": "../../models/m2m100"
+        "Models__M2M100__Path": "../../models/m2m100",
+        "Models__LangDetect__Path": "../../models/langdetect/model_v3.bin"
       }
     },
     "https": {
@@ -20,7 +21,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Models__Nllb__Path": "../../models/nllb",
-        "Models__M2M100__Path": "../../models/m2m100"
+        "Models__M2M100__Path": "../../models/m2m100",
+        "Models__LangDetect__Path": "../../models/langdetect/model_v3.bin"
       }
     }
   }
