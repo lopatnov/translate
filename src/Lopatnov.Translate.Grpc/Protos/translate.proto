@@ -98,7 +98,8 @@ message TranslateAudioResponse {
 message GetCapabilitiesRequest {}
 
 message GetCapabilitiesResponse {
-  repeated string supported_languages = 1;
+  reserved 1;
+  reserved "supported_languages";
   repeated string available_voices = 2;
   repeated string available_models = 3;
   bool stt_available = 4;

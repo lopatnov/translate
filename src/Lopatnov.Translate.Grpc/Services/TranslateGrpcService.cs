@@ -60,11 +60,6 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             TtsAvailable = false,
         };
         response.AvailableModels.AddRange(_manager.GetAvailableModels());
-        response.SupportedLanguages.AddRange([
-            Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
-            Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
-            Language.JapaneseJpan,   Language.ArabicArab,
-        ]);
         return Task.FromResult(response);
     }
 

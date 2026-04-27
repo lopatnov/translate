@@ -148,11 +148,10 @@ grpcurl -plaintext \
 
 ## GetCapabilities
 
-Returns the list of configured translation models and supported languages.
+Returns the list of configured translation models.
 
 ```protobuf
 message GetCapabilitiesResponse {
-  repeated string supported_languages = 1;
   repeated string available_models = 3;
 }
 ```
@@ -174,19 +173,13 @@ See [models.md](models.md) for configuration and download instructions.
 
 ## Supported Languages
 
-| Code        | Language              |
-| ----------- | --------------------- |
-| `eng_Latn`  | English               |
-| `ukr_Cyrl`  | Ukrainian             |
-| `rus_Cyrl`  | Russian               |
-| `deu_Latn`  | German                |
-| `fra_Latn`  | French                |
-| `spa_Latn`  | Spanish               |
-| `pol_Latn`  | Polish                |
-| `zho_Hans`  | Chinese (Simplified)  |
-| `jpn_Jpan`  | Japanese              |
-| `arb_Arab`  | Arabic                |
+All fields that accept a language code (`source_language`, `target_language`) use [FLORES-200](https://github.com/facebookresearch/flores) codes
+(e.g. `eng_Latn`, `zho_Hans`, `hin_Deva`, `spa_Latn`, `fra_Latn`, `arb_Arab`, `ben_Beng`, `por_Latn`, `rus_Cyrl`, `urd_Arab`, `ind_Latn`, `deu_Latn`, `jpn_Jpan`, `swh_Latn`, `mar_Deva`, `tel_Telu`, `tur_Latn`, `tam_Taml`, `kor_Hang`, `vie_Latn`, `ita_Latn`, `tha_Thai`, `pes_Arab`, `pol_Latn`, `ukr_Cyrl`, `ron_Latn`, `nld_Latn`, `ell_Grek`, `ces_Latn`, `hun_Latn`, `swe_Latn`, `pan_Guru`, `jav_Latn`, etc...).
 
-Uses [FLORES-200](https://github.com/facebookresearch/flores) language codes. Full list via `GetCapabilities`.
+The supported set depends on the model:
 
-Need a language that isn't listed? Feel free to [open an issue](https://github.com/lopatnov/translate/issues).
+| Model type     | Languages supported                   |
+| -------------- | ------------------------------------- |
+| NLLB-200       | 200 languages — full FLORES-200 list  |
+| M2M-100        | 100 languages                         |
+| LibreTranslate | depends on the instance configuration |
