@@ -9,12 +9,12 @@ namespace Lopatnov.Translate.Grpc.Services;
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private readonly ModelSessionManager _manager;
-    private readonly ILanguageDetector _detector;
+    private readonly Lazy<ILanguageDetector> _detector;
     private readonly string _defaultModel;
 
     public TranslateGrpcService(
         ModelSessionManager manager,
-        ILanguageDetector detector,
+        Lazy<ILanguageDetector> detector,
         IOptions<TranslationOptions> translationOptions)
     {
         _manager = manager;
@@ -33,7 +33,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         if (string.IsNullOrWhiteSpace(sourceLanguage) ||
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            detectedLanguage = _detector.Detect(request.Text);
+            detectedLanguage = _detector.Value.Detect(request.Text);
             sourceLanguage = detectedLanguage;
         }
 
@@ -90,7 +90,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override Task<DetectLanguageResponse> DetectLanguage(
         DetectLanguageRequest request, ServerCallContext context)
     {
-        var language = _detector.Detect(request.Text);
+        var language = _detector.Value.Detect(request.Text);
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
 

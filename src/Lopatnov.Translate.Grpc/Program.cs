@@ -100,6 +100,9 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
     }
 });
 
+builder.Services.AddSingleton<Lazy<ILanguageDetector>>(sp =>
+    new Lazy<ILanguageDetector>(sp.GetRequiredService<ILanguageDetector>));
+
 // --- ModelSessionManager: lazy init + TTL eviction ---
 builder.Services.AddSingleton<ModelSessionManager>(sp =>
 {

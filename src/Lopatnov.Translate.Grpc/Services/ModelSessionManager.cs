@@ -44,7 +44,7 @@ public sealed class ModelSessionManager : IDisposable
     }
 
     private readonly IReadOnlyDictionary<string, Func<ITextTranslator>> _factories;
-    private readonly HashSet<string> _allowed;
+    private readonly HashSet<string> _configured; // all names from config, for error messages
     private readonly ConcurrentDictionary<string, Entry> _sessions =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeSpan _ttl;
@@ -55,8 +55,16 @@ public sealed class ModelSessionManager : IDisposable
         IEnumerable<string> allowedModels,
         TimeSpan ttl)
     {
-        _factories = new Dictionary<string, Func<ITextTranslator>>(factories, StringComparer.OrdinalIgnoreCase);
-        _allowed = new HashSet<string>(allowedModels, StringComparer.OrdinalIgnoreCase);
+        _configured = new HashSet<string>(factories.Keys, StringComparer.OrdinalIgnoreCase);
+
+        var allowed = new HashSet<string>(allowedModels, StringComparer.OrdinalIgnoreCase);
+        _factories = new Dictionary<string, Func<ITextTranslator>>(
+            allowed.Count == 0
+                ? factories
+                : factories.Where(kv => allowed.Contains(kv.Key))
+                           .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+
         _ttl = ttl;
         var interval = ttl < TimeSpan.FromMinutes(1) ? TimeSpan.FromMinutes(1) : ttl;
         _evictionTimer = new Timer(_ => Evict(), null, interval, interval);
@@ -69,9 +77,9 @@ public sealed class ModelSessionManager : IDisposable
     /// <exception cref="UnauthorizedAccessException">Provider is configured but not in the allowlist.</exception>
     public ITextTranslator Get(string key)
     {
-        if (!_factories.ContainsKey(key))
+        if (!_configured.Contains(key))
             throw new KeyNotFoundException($"Provider '{key}' is not configured.");
-        if (_allowed.Count > 0 && !_allowed.Contains(key))
+        if (!_factories.ContainsKey(key))
             throw new UnauthorizedAccessException($"Provider '{key}' is not in the allowed list.");
 
         while (true)
@@ -89,13 +97,9 @@ public sealed class ModelSessionManager : IDisposable
     }
 
     /// <summary>
-    /// Returns the keys of models that are configured and not blocked by the allowlist.
+    /// Returns the keys of models that are allowed (or all configured, if no allowlist).
     /// </summary>
-    public IReadOnlyList<string> GetAvailableModels()
-    {
-        var keys = _factories.Keys;
-        return (_allowed.Count == 0 ? keys : keys.Where(k => _allowed.Contains(k))).ToArray();
-    }
+    public IReadOnlyList<string> GetAvailableModels() => _factories.Keys.ToArray();
 
     private void Evict()
     {
