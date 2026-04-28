@@ -2,7 +2,7 @@ using Lopatnov.Translate.Core;
 
 namespace Lopatnov.Translate.Core.Tests;
 
-// ── Skip helpers (xUnit 2.x: programmatic skip via attribute constructor) ────
+// ── Skip helpers ─────────────────────────────────────────────────────────────
 
 [AttributeUsage(AttributeTargets.Method)]
 internal sealed class IntegrationFactAttribute : FactAttribute
@@ -10,7 +10,7 @@ internal sealed class IntegrationFactAttribute : FactAttribute
     public IntegrationFactAttribute()
     {
         if (!File.Exists(FastTextDetectorFixture.ModelPath))
-            Skip = $"LangDetect model not found at '{FastTextDetectorFixture.ModelPath}'";
+            Skip = $"GlotLID model not found at '{FastTextDetectorFixture.ModelPath}'";
     }
 }
 
@@ -20,22 +20,58 @@ internal sealed class IntegrationTheoryAttribute : TheoryAttribute
     public IntegrationTheoryAttribute()
     {
         if (!File.Exists(FastTextDetectorFixture.ModelPath))
-            Skip = $"LangDetect model not found at '{FastTextDetectorFixture.ModelPath}'";
+            Skip = $"GlotLID model not found at '{FastTextDetectorFixture.ModelPath}'";
     }
 }
 
-// ── Fixture (loads model once per class) ─────────────────────────────────────
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class Lid176FactAttribute : FactAttribute
+{
+    public Lid176FactAttribute()
+    {
+        if (!File.Exists(FastTextLid176Fixture.ModelPath))
+            Skip = $"LID-176 model not found at '{FastTextLid176Fixture.ModelPath}'";
+    }
+}
+
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class Lid176TheoryAttribute : TheoryAttribute
+{
+    public Lid176TheoryAttribute()
+    {
+        if (!File.Exists(FastTextLid176Fixture.ModelPath))
+            Skip = $"LID-176 model not found at '{FastTextLid176Fixture.ModelPath}'";
+    }
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
 
 public sealed class FastTextDetectorFixture
 {
     internal static readonly string ModelPath =
         Environment.GetEnvironmentVariable("TEST_LANGDETECT_MODEL_PATH")
         ?? Path.GetFullPath(
-               Path.Combine(AppContext.BaseDirectory, "../../../../../models/langdetect/model_v3.bin"));
+               Path.Combine(AppContext.BaseDirectory, "../../../../../models/glotlid/model_v3.bin"));
 
     public FastTextLanguageDetector? Detector { get; }
 
     public FastTextDetectorFixture()
+    {
+        if (File.Exists(ModelPath))
+            Detector = FastTextLanguageDetector.Load(ModelPath);
+    }
+}
+
+public sealed class FastTextLid176Fixture
+{
+    internal static readonly string ModelPath =
+        Environment.GetEnvironmentVariable("TEST_LID176_MODEL_PATH")
+        ?? Path.GetFullPath(
+               Path.Combine(AppContext.BaseDirectory, "../../../../../models/fasttext-language-id/lid.176.ftz"));
+
+    public FastTextLanguageDetector? Detector { get; }
+
+    public FastTextLid176Fixture()
     {
         if (File.Exists(ModelPath))
             Detector = FastTextLanguageDetector.Load(ModelPath);
@@ -98,6 +134,53 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     public void Detect_IsDeterministic()
     {
         const string text = "Исследователи открыли новые звёзды в далёких галактиках.";
+        Assert.Equal(fixture.Detector!.Detect(text), fixture.Detector.Detect(text));
+    }
+}
+
+// ── LID-176 integration tests (require models/fasttext-language-id/lid.176.ftz) ──
+
+[Trait("Category", "Integration")]
+public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture)
+    : IClassFixture<FastTextLid176Fixture>
+{
+    [Lid176Theory]
+    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn")]
+    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn")]
+    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn")]
+    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl")]
+    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl")]
+    [InlineData("Los investigadores descubrieron nuevas estrellas en galaxias lejanas utilizando un telescopio moderno.", "spa_Latn")]
+    [InlineData("Gli scienziati hanno scoperto nuove stelle in galassie lontane usando un telescopio moderno.", "ita_Latn")]
+    [InlineData("Onderzoekers ontdekten nieuwe sterren in verre sterrenstelsels met behulp van een moderne telescoop.", "nld_Latn")]
+    public void Detect_ReturnsExpectedLanguage_LongText(string text, string expected)
+    {
+        Assert.Equal(expected, fixture.Detector!.Detect(text));
+    }
+
+    [Lid176Theory]
+    [InlineData("Guten Morgen", "deu_Latn")]
+    [InlineData("Bonjour le monde", "fra_Latn")]
+    [InlineData("Hello world", "eng_Latn")]
+    [InlineData("Привет мир", "rus_Cyrl")]
+    public void Detect_ReturnsExpectedLanguage_ShortPhrase(string text, string expected)
+    {
+        Assert.Equal(expected, fixture.Detector!.Detect(text));
+    }
+
+    [Lid176Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null!)]
+    public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
+    {
+        Assert.Equal(Language.EnglishLatin, fixture.Detector!.Detect(text!));
+    }
+
+    [Lid176Fact]
+    public void Detect_IsDeterministic()
+    {
+        const string text = "Das Wetter in Berlin ist heute sehr schön.";
         Assert.Equal(fixture.Detector!.Detect(text), fixture.Detector.Detect(text));
     }
 }
