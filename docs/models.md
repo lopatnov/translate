@@ -27,7 +27,7 @@ Models are configured by name in `appsettings.json` under `Models`. Each entry h
 ```jsonc
 "Models": {
   "<name>": {
-    "Model": "<type>",  // required: NLLB | M2M100 | GlotLID | LID-176 | LibreTranslate
+    "Model": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate
     // ... type-specific properties (see each model below)
   }
 }
@@ -48,11 +48,11 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `BeamSize` | `1` | Beam search width (NLLB only; higher = better quality, slower) |
 | `VocabFile` | `""` | BPE vocabulary file (M2M100 only: `vocab.json`) |
 
-**Properties for GlotLID and LID-176:**
+**Properties for FastText:**
 
 | Property | Default | Description |
 | --- | --- | --- |
-| `Path` | — | Full path to the model file (`.bin` or `.ftz`) |
+| `Path` | — | Path to the model file (`.bin` or `.ftz`) |
 
 **Properties for LibreTranslate:**
 
@@ -70,7 +70,7 @@ Controls routing and lifecycle of loaded models.
 ```jsonc
 "Translation": {
   "DefaultModel": "nllb",      // model used when the request's model field is empty
-  "AutoDetect": "langdetect",  // model used for language auto-detection (must be GlotLID or LID-176)
+  "AutoDetect": "langdetect",  // model used for language auto-detection (must be FastText)
   "AllowedModels": [],         // allowlist of model names; empty = all configured models are allowed
   "ModelTtlMinutes": 30        // minutes of inactivity before a model is unloaded from memory
 }
@@ -79,7 +79,7 @@ Controls routing and lifecycle of loaded models.
 | Property | Default | Description |
 | --- | --- | --- |
 | `DefaultModel` | `""` | Name of the model to use when `model` is not specified in the request. If empty and the request omits `model`, the request fails. |
-| `AutoDetect` | `""` | Name of the language detection model (type `GlotLID` or `LID-176`). Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty, auto-detection is disabled. |
+| `AutoDetect` | `""` | Name of the language detection model (type `FastText`). Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty, auto-detection is disabled. |
 | `AllowedModels` | `[]` | Restricts which models clients may request by name. Empty list means all configured translation models are accessible. Useful when you configure multiple models but want to expose only some via the API. |
 | `ModelTtlMinutes` | `30` | A loaded model is kept in memory for this many minutes after its last use, then unloaded to free resources. Set to a large value to keep models always loaded. |
 
@@ -114,7 +114,7 @@ HuggingFace repo: [lopatnov/fasttext-language-id](https://huggingface.co/lopatno
 ```jsonc
 "Models": {
   "langdetect": {
-    "Model": "LID-176",
+    "Model": "FastText",
     "Path": "./models/langdetect/lid176/lid.176.ftz"
   }
 },
@@ -148,7 +148,7 @@ HuggingFace repo: [lopatnov/glotlid](https://huggingface.co/lopatnov/glotlid)
 ```jsonc
 "Models": {
   "langdetect": {
-    "Model": "GlotLID",
+    "Model": "FastText",
     "Path": "./models/langdetect/glotlid/model_v3.bin"
   }
 },

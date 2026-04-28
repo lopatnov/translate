@@ -29,7 +29,7 @@ foreach (var (name, cfg) in rawModels)
     if (!ModelType.IsKnown(cfg.Model))
         throw new InvalidOperationException(
             $"Configuration error: Models:{name}:Model value '{cfg.Model}' is unknown. " +
-            "Known: NLLB, M2M100, GlotLID, LID-176, LibreTranslate.");
+            "Known: NLLB, M2M100, FastText, LibreTranslate.");
 }
 
 // --- Validate Translation references ---

@@ -4,18 +4,13 @@ public static class ModelType
 {
     public const string NLLB = "NLLB";
     public const string M2M100 = "M2M100";
-    public const string GlotLID = "GlotLID";
-    public const string LID176 = "LID-176";
+    public const string FastText = "FastText";
     public const string LibreTranslate = "LibreTranslate";
 
     private static readonly HashSet<string> KnownTypes =
-        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, GlotLID, LID176, LibreTranslate };
+        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, FastText, LibreTranslate };
 
     public static bool IsKnown(string type) => KnownTypes.Contains(type);
-
-    public static bool IsLanguageDetector(string type) =>
-        type.Equals(GlotLID, StringComparison.OrdinalIgnoreCase) ||
-        type.Equals(LID176, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ModelConfig
