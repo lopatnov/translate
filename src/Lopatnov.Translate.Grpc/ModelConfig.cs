@@ -15,7 +15,7 @@ public static class ModelType
 
 public sealed class ModelConfig
 {
-    public string Model { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
     public string EncoderFile { get; set; } = "encoder_model.onnx";
     public string DecoderFile { get; set; } = "decoder_model.onnx";

@@ -22,18 +22,18 @@
 
 ### Models section
 
-Models are configured by name in `appsettings.json` under `Models`. Each entry has a `Model` type discriminator and type-specific properties. The name you choose becomes the value of the `model` field in API requests.
+Models are configured by name in `appsettings.json` under `Models`. Each entry has a `Type` discriminator and type-specific properties. The name you choose becomes the value of the `model` field in API requests.
 
 ```jsonc
 "Models": {
   "<name>": {
-    "Model": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate
+    "Type": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate
     // ... type-specific properties (see each model below)
   }
 }
 ```
 
-Multiple entries of the same type are allowed — just use different names. If `Model` is missing or unknown, the service will fail to start with a configuration error.
+Multiple entries of the same type are allowed — just use different names. If `Type` is missing or unknown, the service will fail to start with a configuration error.
 
 **Properties for NLLB and M2M100:**
 
@@ -61,6 +61,19 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `BaseUrl` | — | URL of the LibreTranslate instance, e.g. `http://libretranslate:5000` |
 | `ApiKey` | `""` | API key, if the instance requires one |
 
+#### Type compatibility
+
+`Type` identifies the tokenizer format, not the exact model. This means fine-tuned or alternative models are supported as long as the tokenizer is compatible:
+
+| Type | Compatible with |
+| --- | --- |
+| `NLLB` | Any ONNX encoder-decoder model using the NLLB-200 SentencePiece tokenizer with FLORES-200 language tokens |
+| `M2M100` | Any ONNX encoder-decoder model using the M2M-100 tokenizer (`vocab.json` + `added_tokens.json`, ISO 639-1 `__lang__` tokens) |
+| `FastText` | Any fastText supervised classification model in `.bin` or `.ftz` format |
+| `LibreTranslate` | Any LibreTranslate-compatible HTTP API endpoint |
+
+Models **not** compatible without a new type: MarianMT (OPUS-MT), mBART-50, SeamlessM4T — they use different tokenizer formats.
+
 ---
 
 ### Translation section
@@ -70,7 +83,7 @@ Controls routing and lifecycle of loaded models.
 ```jsonc
 "Translation": {
   "DefaultModel": "nllb",      // model used when the request's model field is empty
-  "AutoDetect": "langdetect",  // model used for language auto-detection (must be FastText)
+  "AutoDetect": "langdetect",  // name of a FastText model for language auto-detection
   "AllowedModels": [],         // allowlist of model names; empty = all configured models are allowed
   "ModelTtlMinutes": 30        // minutes of inactivity before a model is unloaded from memory
 }
@@ -79,7 +92,7 @@ Controls routing and lifecycle of loaded models.
 | Property | Default | Description |
 | --- | --- | --- |
 | `DefaultModel` | `""` | Name of the model to use when `model` is not specified in the request. If empty and the request omits `model`, the request fails. |
-| `AutoDetect` | `""` | Name of the language detection model (type `FastText`). Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty, auto-detection is disabled. |
+| `AutoDetect` | `""` | Name of a `FastText` model used for language auto-detection. Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty or the model file is missing, falls back to heuristic detection. |
 | `AllowedModels` | `[]` | Restricts which models clients may request by name. Empty list means all configured translation models are accessible. Useful when you configure multiple models but want to expose only some via the API. |
 | `ModelTtlMinutes` | `30` | A loaded model is kept in memory for this many minutes after its last use, then unloaded to free resources. Set to a large value to keep models always loaded. |
 
@@ -114,7 +127,7 @@ HuggingFace repo: [lopatnov/fasttext-language-id](https://huggingface.co/lopatno
 ```jsonc
 "Models": {
   "langdetect": {
-    "Model": "FastText",
+    "Type": "FastText",
     "Path": "./models/langdetect/lid176/lid.176.ftz"
   }
 },
@@ -148,7 +161,7 @@ HuggingFace repo: [lopatnov/glotlid](https://huggingface.co/lopatnov/glotlid)
 ```jsonc
 "Models": {
   "langdetect": {
-    "Model": "FastText",
+    "Type": "FastText",
     "Path": "./models/langdetect/glotlid/model_v3.bin"
   }
 },
@@ -186,7 +199,7 @@ HuggingFace repo: [lopatnov/nllb-200-distilled-600M-onnx](https://huggingface.co
 ```jsonc
 "Models": {
   "nllb": {
-    "Model": "NLLB",
+    "Type": "NLLB",
     "Path": "./models/nllb-600m",
     "EncoderFile": "encoder_model.onnx",
     "DecoderFile": "decoder_model.onnx",
@@ -274,7 +287,7 @@ HuggingFace repo: [lopatnov/m2m100_418M-onnx](https://huggingface.co/lopatnov/m2
 ```jsonc
 "Models": {
   "m2m100": {
-    "Model": "M2M100",
+    "Type": "M2M100",
     "Path": "./models/m2m100-418m",
     "EncoderFile": "encoder_model.onnx",
     "DecoderFile": "decoder_model.onnx",
@@ -333,7 +346,7 @@ An open-source machine translation server. Runs as a separate Docker container a
 ```jsonc
 "Models": {
   "libretranslate": {
-    "Model": "LibreTranslate",
+    "Type": "LibreTranslate",
     "BaseUrl": "http://libretranslate:5000",
     "ApiKey": ""  // set if your LibreTranslate instance requires a key
   }

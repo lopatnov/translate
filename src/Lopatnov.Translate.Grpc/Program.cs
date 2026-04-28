@@ -23,12 +23,12 @@ var rawModels = builder.Configuration.GetSection("Models").GetChildren()
 
 foreach (var (name, cfg) in rawModels)
 {
-    if (string.IsNullOrWhiteSpace(cfg.Model))
+    if (string.IsNullOrWhiteSpace(cfg.Type))
         throw new InvalidOperationException(
-            $"Configuration error: Models:{name}:Model is required.");
-    if (!ModelType.IsKnown(cfg.Model))
+            $"Configuration error: Models:{name}:Type is required.");
+    if (!ModelType.IsKnown(cfg.Type))
         throw new InvalidOperationException(
-            $"Configuration error: Models:{name}:Model value '{cfg.Model}' is unknown. " +
+            $"Configuration error: Models:{name}:Type value '{cfg.Type}' is unknown. " +
             "Known: NLLB, M2M100, FastText, LibreTranslate.");
 }
 
@@ -50,7 +50,7 @@ foreach (var modelName in allowedModels)
 
 // --- Register named HttpClients for LibreTranslate entries ---
 foreach (var (name, cfg) in rawModels.Where(kv =>
-    kv.Value.Model.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
+    kv.Value.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
     !string.IsNullOrWhiteSpace(kv.Value.BaseUrl)))
 {
     var capturedUrl = cfg.BaseUrl;
@@ -88,7 +88,7 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         return new HeuristicLanguageDetector();
     }
     log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
-        autoDetectName, cfg.Model, modelPath);
+        autoDetectName, cfg.Type, modelPath);
     try
     {
         return FastTextLanguageDetector.Load(modelPath);
@@ -110,7 +110,7 @@ builder.Services.AddSingleton<ModelSessionManager>(sp =>
         var c = cfg;
         var n = name;
 
-        if (c.Model.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
+        if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
         {
             factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
             {
@@ -123,7 +123,7 @@ builder.Services.AddSingleton<ModelSessionManager>(sp =>
                 BeamSize = c.BeamSize,
             }));
         }
-        else if (c.Model.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase) &&
+        else if (c.Type.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase) &&
                  !string.IsNullOrWhiteSpace(c.Path))
         {
             factories[n] = () => new M2M100Translator(Options.Create(new M2M100Options
@@ -137,7 +137,7 @@ builder.Services.AddSingleton<ModelSessionManager>(sp =>
                 VocabFile = c.VocabFile,
             }));
         }
-        else if (c.Model.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
+        else if (c.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
                  !string.IsNullOrWhiteSpace(c.BaseUrl))
         {
             var httpFac = sp.GetRequiredService<IHttpClientFactory>();
