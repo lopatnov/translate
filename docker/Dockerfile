@@ -9,7 +9,7 @@ RUN dotnet publish src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj \
     -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-WORKDIR /app
+WORKDIR /app/src/Lopatnov.Translate.Grpc
 
 COPY --from=build /app/publish .
 

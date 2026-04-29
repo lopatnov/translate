@@ -29,5 +29,8 @@
   "[xml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true
+  },
+  "files.associations": {
+    "appsettings*.json": "jsonc"
   }
 }

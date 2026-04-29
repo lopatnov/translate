@@ -1,33 +1,53 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace Lopatnov.Translate.Grpc.Services;
 
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
-    private const string DefaultProvider = "nllb";
-    private readonly IServiceProvider _services;
+    private readonly ModelSessionManager _manager;
+    private readonly Lazy<ILanguageDetector> _detector;
+    private readonly string _defaultModel;
 
-    public TranslateGrpcService(IServiceProvider services)
-        => _services = services;
+    public TranslateGrpcService(
+        ModelSessionManager manager,
+        Lazy<ILanguageDetector> detector,
+        IOptions<TranslationOptions> translationOptions)
+    {
+        _manager = manager;
+        _detector = detector;
+        _defaultModel = translationOptions.Value.DefaultModel;
+    }
 
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var (translator, providerKey) = ResolveTranslator(request.Provider);
+        var (translator, providerKey) = ResolveTranslator(request.Model);
+
+        var sourceLanguage = request.SourceLanguage;
+        string? detectedLanguage = null;
+
+        if (string.IsNullOrWhiteSpace(sourceLanguage) ||
+            sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            detectedLanguage = _detector.Value.Detect(request.Text);
+            sourceLanguage = detectedLanguage;
+        }
 
         var translated = await translator.TranslateAsync(
             request.Text,
-            request.SourceLanguage,
+            sourceLanguage,
             request.TargetLanguage,
             context.CancellationToken);
 
         return new TranslateTextResponse
         {
             TranslatedText = translated,
-            ProviderUsed = providerKey,
+            DetectedLanguage = detectedLanguage ?? string.Empty,
+            ModelUsed = providerKey,
         };
     }
 
@@ -39,19 +59,14 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             SttAvailable = false,
             TtsAvailable = false,
         };
-        response.AvailableProviders.AddRange(["nllb", "libretranslate"]);
-        response.SupportedLanguages.AddRange([
-            Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
-            Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
-            Language.JapaneseJpan,   Language.ArabicArab,
-        ]);
+        response.AvailableModels.AddRange(_manager.GetAvailableModels());
         return Task.FromResult(response);
     }
 
     public override async Task<TranslateLocalizationResponse> TranslateLocalization(
         TranslateLocalizationRequest request, ServerCallContext context)
     {
-        var (translator, _) = ResolveTranslator(request.Provider);
+        var (translator, _) = ResolveTranslator(request.Model);
 
         try
         {
@@ -72,6 +87,13 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
     }
 
+    public override Task<DetectLanguageResponse> DetectLanguage(
+        DetectLanguageRequest request, ServerCallContext context)
+    {
+        var language = _detector.Value.Detect(request.Text);
+        return Task.FromResult(new DetectLanguageResponse { Language = language });
+    }
+
     public override Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));
@@ -86,9 +108,18 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
     private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
     {
-        var providerKey = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
-        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
-            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
-        return (translator, providerKey);
+        var key = string.IsNullOrWhiteSpace(provider) ? _defaultModel : provider.Trim();
+        try
+        {
+            return (_manager.Get(key), key);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{key}'"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
+        }
     }
 }

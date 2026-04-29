@@ -4,16 +4,16 @@ Package: `lopatnov.translate.v1` · Port: `5100`
 
 Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](../src/Lopatnov.Translate.Grpc/Protos/translate.proto)
 
+---
+
 ## RPCs
 
-| RPC                     | Phase | Status          |
-| ----------------------- | ----- | --------------- |
-| `TranslateText`         | 1     | Available       |
-| `TranslateLocalization` | 1     | Available       |
-| `GetCapabilities`       | 1     | Available       |
-| `TranscribeAudio`       | 2     | `UNIMPLEMENTED` |
-| `SynthesizeSpeech`      | 3     | `UNIMPLEMENTED` |
-| `TranslateAudio`        | 4     | `UNIMPLEMENTED` |
+| RPC                     | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `TranslateText`         | Translate a text string                   |
+| `TranslateLocalization` | Translate all strings in a JSON i18n file |
+| `DetectLanguage`        | Detect the language of a text string      |
+| `GetCapabilities`       | List available models and languages       |
 
 ---
 
@@ -26,10 +26,10 @@ Translates a single text string between two languages.
 ```protobuf
 message TranslateTextRequest {
   string text = 1;
-  string source_language = 2;  // FLORES-200 code, e.g. "ukr_Cyrl"
+  string source_language = 2;  // FLORES-200 code, e.g. "ukr_Cyrl"; or "auto" / "" to detect
   string target_language = 3;  // FLORES-200 code, e.g. "eng_Latn"
-  string provider = 4;         // "nllb" | "libretranslate" | "" → defaults to "nllb"
-  string context = 5;          // optional: free-form hint, e.g. "UI button on login form" (reserved for LLM-based providers)
+  string model = 4;            // name of the model entry from config (e.g. "nllb"); empty = default model
+  string context = 5;          // optional: free-form hint for the translation (reserved for LLM-based models)
 }
 ```
 
@@ -38,15 +38,27 @@ message TranslateTextRequest {
 ```protobuf
 message TranslateTextResponse {
   string translated_text = 1;
-  string detected_language = 2;
-  string provider_used = 3;
+  string detected_language = 2;  // set when source_language was "auto" or empty
+  string model_used = 3;
 }
 ```
 
 ### Example
 
 ```bash
-grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
+```
+
+With automatic language detection:
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"text": "Привіт, як справи?", "source_language": "auto", "target_language": "eng_Latn"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
 ---
@@ -55,18 +67,20 @@ grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d 
 
 Translates all leaf string values in a JSON localization file, preserving the key structure.
 Non-string values (numbers, booleans, null) and blank strings are passed through unchanged.
-Supports arbitrary nesting depth (`a.b.c.d`) and arrays.
+Supports arbitrary nesting depth and arrays.
+
+> `source_language` must be an explicit FLORES-200 code — `"auto"` is not supported for this RPC.
 
 ### Request
 
 ```protobuf
 message TranslateLocalizationRequest {
-  string json = 1;                  // JSON object, e.g. i18n / l10n file content
+  string json = 1;
   string source_language = 2;       // FLORES-200 code, e.g. "eng_Latn"
   string target_language = 3;       // FLORES-200 code, e.g. "ukr_Cyrl"
-  string provider = 4;              // "nllb" | "libretranslate" | "" → defaults to "nllb"
-  string existing_translation = 5;  // optional: same-structure JSON; matching non-blank values are reused as-is (incremental translation)
-  string context = 6;               // optional: same-structure JSON with per-key hints (reserved for LLM-based providers)
+  string model = 4;                 // name of the model entry from config; empty = default model
+  string existing_translation = 5;  // optional: same-structure JSON with already-translated values; matching keys are reused as-is
+  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based models)
 }
 ```
 
@@ -84,53 +98,88 @@ message TranslateLocalizationResponse {
 Translate a full i18n file:
 
 ```bash
-grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
 ```
 
 Incremental translation — reuse existing, translate only new keys:
 
 ```bash
-grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl", "existing_translation": "{\"auth\":{\"signIn\":\"Увійти\"}}"}' localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"json": "{\"auth\":{\"email\":\"Email\",\"password\":\"Password\",\"signIn\":\"Sign in\"}}", "source_language": "eng_Latn", "target_language": "ukr_Cyrl", "existing_translation": "{\"auth\":{\"signIn\":\"Увійти\"}}"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateLocalization
+```
+
+---
+
+## DetectLanguage
+
+Detects the language of a text string. Requires `Translation:AutoDetect` to be configured in `appsettings.json`.
+
+### Request
+
+```protobuf
+message DetectLanguageRequest {
+  string text = 1;
+}
+```
+
+### Response
+
+```protobuf
+message DetectLanguageResponse {
+  string language = 1;  // FLORES-200 code, e.g. "ukr_Cyrl", "eng_Latn"
+}
+```
+
+### Example
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"text": "Guten Morgen"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/DetectLanguage
 ```
 
 ---
 
 ## GetCapabilities
 
-Returns supported languages, available providers, and STT/TTS availability.
+Returns the list of configured translation models.
+
+```protobuf
+message GetCapabilitiesResponse {
+  repeated string available_models = 3;
+}
+```
 
 ```bash
-grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d '{}' localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
 ```
+
+---
+
+## Models
+
+See [models.md](models.md) for configuration and download instructions.
 
 ---
 
 ## Supported Languages
 
-| Code        | Language              |
-| ----------- | --------------------- |
-| `eng_Latn`  | English               |
-| `ukr_Cyrl`  | Ukrainian             |
-| `rus_Cyrl`  | Russian               |
-| `deu_Latn`  | German                |
-| `fra_Latn`  | French                |
-| `spa_Latn`  | Spanish               |
-| `pol_Latn`  | Polish                |
-| `zho_Hans`  | Chinese (Simplified)  |
-| `jpn_Jpan`  | Japanese              |
-| `arb_Arab`  | Arabic                |
+All fields that accept a language code (`source_language`, `target_language`) use [FLORES-200](https://github.com/facebookresearch/flores) codes
+(e.g. `eng_Latn`, `zho_Hans`, `hin_Deva`, `spa_Latn`, `fra_Latn`, `arb_Arab`, `ben_Beng`, `por_Latn`, `rus_Cyrl`, `urd_Arab`, `ind_Latn`, `deu_Latn`, `jpn_Jpan`, `swh_Latn`, `mar_Deva`, `tel_Telu`, `tur_Latn`, `tam_Taml`, `kor_Hang`, `vie_Latn`, `ita_Latn`, `tha_Thai`, `pes_Arab`, `pol_Latn`, `ukr_Cyrl`, `ron_Latn`, `nld_Latn`, `ell_Grek`, `ces_Latn`, `hun_Latn`, `swe_Latn`, `pan_Guru`, `jav_Latn`, etc...).
 
-Uses [FLORES-200](https://github.com/facebookresearch/flores) language codes. Full list via `GetCapabilities`.
+The supported set depends on the model:
 
-Need a language that isn't listed? Feel free to [open an issue](https://github.com/lopatnov/translate/issues) — language requests are welcome.
-
----
-
-## Providers
-
-| Key              | Backend                   | Default |
-| ---------------- | ------------------------- | ------- |
-| `nllb`           | NLLB-200 via ONNX Runtime | ✅ yes  |
-| `libretranslate` | LibreTranslate HTTP API   | no      |
-
-Pass `provider` in the request to select. Empty string defaults to `"nllb"`.
+| Model type     | Languages supported                   |
+| -------------- | ------------------------------------- |
+| NLLB-200       | 200 languages — full FLORES-200 list  |
+| M2M-100        | 100 languages                         |
+| LibreTranslate | depends on the instance configuration |

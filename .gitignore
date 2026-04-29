@@ -57,3 +57,5 @@ TestResult.xml
 nunit-*.xml
 /CLAUDE.md
 /.claude
+/.vs
+/src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj.user

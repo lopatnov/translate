@@ -12,4 +12,6 @@ public static class Language
     public const string ChineseSimplified = "zho_Hans";
     public const string JapaneseJpan = "jpn_Jpan";
     public const string ArabicArab = "arb_Arab";
+    public const string HindiDevanagari = "hin_Deva";
+    public const string ThaiThai = "tha_Thai";
 }
