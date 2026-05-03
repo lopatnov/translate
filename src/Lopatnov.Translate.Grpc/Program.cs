@@ -41,12 +41,10 @@ if (!string.IsNullOrWhiteSpace(defaultModel) && !rawModels.ContainsKey(defaultMo
     throw new InvalidOperationException(
         $"Configuration error: Translation:DefaultModel '{defaultModel}' is not defined in Models.");
 
-foreach (var modelName in allowedModels)
-{
-    if (!rawModels.ContainsKey(modelName))
-        throw new InvalidOperationException(
-            $"Configuration error: Translation:AllowedModels contains '{modelName}' which is not defined in Models.");
-}
+var badAllowed = Array.Find(allowedModels, m => !rawModels.ContainsKey(m));
+if (badAllowed != null)
+    throw new InvalidOperationException(
+        $"Configuration error: Translation:AllowedModels contains '{badAllowed}' which is not defined in Models.");
 
 // --- Register named HttpClients for LibreTranslate entries ---
 foreach (var (name, cfg) in rawModels.Where(kv =>
@@ -87,8 +85,9 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
             autoDetectName, modelPath);
         return new HeuristicLanguageDetector();
     }
+    var cfgType = cfg.Type;
     log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
-        autoDetectName, cfg.Type, modelPath);
+        autoDetectName, cfgType, modelPath);
     try
     {
         return FastTextLanguageDetector.Load(modelPath);
@@ -104,55 +103,46 @@ builder.Services.AddSingleton<Lazy<ILanguageDetector>>(sp =>
     new Lazy<ILanguageDetector>(sp.GetRequiredService<ILanguageDetector>));
 
 // --- ModelSessionManager: lazy init + TTL eviction ---
-builder.Services.AddSingleton<ModelSessionManager>(sp =>
+builder.Services.AddSingleton<ModelSessionManager>(BuildSessionManager);
+
+ModelSessionManager BuildSessionManager(IServiceProvider sp)
 {
     var factories = new Dictionary<string, Func<ITextTranslator>>(StringComparer.OrdinalIgnoreCase);
-
     foreach (var (name, cfg) in rawModels)
-    {
-        var c = cfg;
-        var n = name;
-
-        if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
-        {
-            factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
-            {
-                Path = ResolvePath(c.Path),
-                EncoderFile = c.EncoderFile,
-                DecoderFile = c.DecoderFile,
-                TokenizerFile = c.TokenizerFile,
-                TokenizerConfigFile = c.TokenizerConfigFile,
-                MaxTokens = c.MaxTokens,
-                BeamSize = c.BeamSize,
-            }));
-        }
-        else if (c.Type.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase) &&
-                 !string.IsNullOrWhiteSpace(c.Path))
-        {
-            factories[n] = () => new M2M100Translator(Options.Create(new M2M100Options
-            {
-                Path = ResolvePath(c.Path),
-                EncoderFile = c.EncoderFile,
-                DecoderFile = c.DecoderFile,
-                TokenizerFile = c.TokenizerFile,
-                TokenizerConfigFile = c.TokenizerConfigFile,
-                MaxTokens = c.MaxTokens,
-                VocabFile = c.VocabFile,
-            }));
-        }
-        else if (c.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
-                 !string.IsNullOrWhiteSpace(c.BaseUrl))
-        {
-            var httpFac = sp.GetRequiredService<IHttpClientFactory>();
-            factories[n] = () => new LibreTranslateClient(
-                httpFac.CreateClient(n),
-                Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
-        }
-    }
-
+        RegisterFactory(factories, name, cfg, sp);
     var opts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
     return new ModelSessionManager(factories, opts.AllowedModels, TimeSpan.FromMinutes(opts.ModelTtlMinutes));
-});
+}
+
+void RegisterFactory(Dictionary<string, Func<ITextTranslator>> factories, string name, ModelConfig cfg, IServiceProvider sp)
+{
+    var c = cfg; var n = name;
+    if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
+    {
+        factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
+        {
+            Path = ResolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+            MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
+        }));
+    }
+    else if (c.Type.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(c.Path))
+    {
+        factories[n] = () => new M2M100Translator(Options.Create(new M2M100Options
+        {
+            Path = ResolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+            MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
+        }));
+    }
+    else if (c.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(c.BaseUrl))
+    {
+        var httpFac = sp.GetRequiredService<IHttpClientFactory>();
+        factories[n] = () => new LibreTranslateClient(
+            httpFac.CreateClient(n),
+            Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
+    }
+}
 
 var app = builder.Build();
 

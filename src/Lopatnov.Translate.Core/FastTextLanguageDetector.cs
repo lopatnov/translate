@@ -31,13 +31,20 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         public long Count; // frequency; used during tree construction only
     }
 
+    private readonly record struct ModelParams(int Dim, int Minn, int Maxn, int Bucket, int Nwords);
+
+    private readonly record struct MatrixState(
+        float[][]? Dense, long Rows,
+        int PqNsubq, int PqDsub, int PqLastDsub,
+        float[] PqCentroids, byte[] Codes,
+        bool QNorm, float[]? NormCentroids, byte[]? NormCodes);
+
     // --- model params ---
     private readonly int _dim;
     private readonly int _minn;
     private readonly int _maxn;
     private readonly int _bucket;
     private readonly int _nwords;
-    private readonly string _labelPrefix;
 
     // --- vocabulary ---
     private readonly Dictionary<string, int> _wordToId;
@@ -72,21 +79,17 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     // -------------------------------------------------------------------------
 
     private FastTextLanguageDetector(
-        int dim, int minn, int maxn, int bucket, int nwords, string labelPrefix,
-        Dictionary<string, int> wordToId,
-        int pqNsubq, int pqDsub, int pqLastDsub, float[] pqCentroids, byte[] codes, long inputRows,
-        bool qnorm, float[]? normCentroids, byte[]? normCodes,
-        float[][]? dense,
-        float[] output, string[] labels,
-        HsNode[]? hsTree,
-        Dictionary<int, int>? ngramPruneidx)
+        ModelParams model, Dictionary<string, int> wordToId,
+        MatrixState matrix, float[] output, string[] labels,
+        HsNode[]? hsTree, Dictionary<int, int>? ngramPruneidx)
     {
-        _dim = dim; _minn = minn; _maxn = maxn; _bucket = bucket; _nwords = nwords; _labelPrefix = labelPrefix;
+        _dim = model.Dim; _minn = model.Minn; _maxn = model.Maxn;
+        _bucket = model.Bucket; _nwords = model.Nwords;
         _wordToId = wordToId;
-        _pqNsubq = pqNsubq; _pqDsub = pqDsub; _pqLastDsub = pqLastDsub;
-        _pqCentroids = pqCentroids; _codes = codes; _inputRows = inputRows;
-        _qnorm = qnorm; _normCentroids = normCentroids; _normCodes = normCodes;
-        _dense = dense;
+        _dense = matrix.Dense; _inputRows = matrix.Rows;
+        _pqNsubq = matrix.PqNsubq; _pqDsub = matrix.PqDsub; _pqLastDsub = matrix.PqLastDsub;
+        _pqCentroids = matrix.PqCentroids; _codes = matrix.Codes;
+        _qnorm = matrix.QNorm; _normCentroids = matrix.NormCentroids; _normCodes = matrix.NormCodes;
         _output = output; _labels = labels;
         _hsTree = hsTree;
         _ngramPruneidx = ngramPruneidx;
@@ -105,58 +108,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         if (version != VERSION)
             throw new InvalidDataException($"Unsupported fastText version {version}.");
 
-        // --- Args ---
-        // GlotLID models start with dim at pos 8 (no lr/lrUpdateRate).
-        // Standard fastText models start with lr (double) at pos 8.
-        // Detect by reading the first double: a valid lr is in (1e-100, 100); near-zero → GlotLID format.
-        double lr = br.ReadDouble();
-        bool isStandardFormat = lr is > 1e-100 and < 100.0;
-
-        int dim, minn, maxn, bucket, loss;
-        if (isStandardFormat)
-        {
-            br.ReadInt32();            // lrUpdateRate
-            dim = br.ReadInt32();
-            br.ReadInt32();            // ws
-            br.ReadInt32();            // epoch
-            br.ReadInt32();            // minCount
-            br.ReadInt32();            // neg
-            br.ReadInt32();            // wordNgrams
-            loss = br.ReadInt32();
-            br.ReadInt32();            // model
-            bucket = br.ReadInt32();
-            minn = br.ReadInt32();
-            maxn = br.ReadInt32();
-            br.ReadDouble();           // t
-            // Older fastText models (e.g. lid.176.bin) do not write verbose or
-            // pretrainedVectors. Detect by peeking: verbose is always 0-5;
-            // a dict size starts at 10 000+ so the ranges don't overlap.
-            int maybeVerbose = br.ReadInt32();
-            if (maybeVerbose <= 5)
-                br.ReadBytes((int)br.ReadUInt32()); // pretrainedVectors path (ignored)
-            else
-                br.BaseStream.Seek(-4, SeekOrigin.Current); // was dict size — put back
-        }
-        else
-        {
-            // GlotLID format: dim starts at pos 8, extra nthreads field before t.
-            br.BaseStream.Seek(8, SeekOrigin.Begin);
-            dim = br.ReadInt32();
-            br.ReadInt32();            // ws
-            br.ReadInt32();            // epoch
-            br.ReadInt32();            // minCount
-            br.ReadInt32();            // neg
-            br.ReadInt32();            // wordNgrams
-            loss = br.ReadInt32();
-            br.ReadInt32();            // model
-            bucket = br.ReadInt32();
-            minn = br.ReadInt32();
-            maxn = br.ReadInt32();
-            br.ReadInt32();            // nthreads (training-only)
-            br.ReadDouble();           // t
-        }
-
-        const string labelPrefix = "__label__";
+        var (model, loss) = ReadModelArgs(br);
 
         // --- Dictionary ---
         int size = br.ReadInt32();
@@ -175,25 +127,18 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             types[i] = br.ReadByte(); // 0=word, 1=label
         }
 
-        // pruneidx_ in fastText only maps n-gram raw hashes (not words).
-        // Words are always at row index equal to their position in the dictionary.
+        // pruneidx_ maps n-gram raw hashes only; words use their dictionary position directly.
         var ngramPruneidx = new Dictionary<int, int>();
         for (long i = 0; i < pruneidxSize; i++)
-        {
-            int first = br.ReadInt32();
-            int second = br.ReadInt32();
-            ngramPruneidx[first] = second;
-        }
+            ngramPruneidx[br.ReadInt32()] = br.ReadInt32();
 
         var wordToId = new Dictionary<string, int>(nwords, StringComparer.Ordinal);
         for (int i = 0; i < size; i++)
-        {
-            if (types[i] != 0) continue;
-            wordToId[words[i]] = i; // row = position in dictionary (valid for both pruned and non-pruned)
-        }
+            if (types[i] == 0) wordToId[words[i]] = i;
 
         var labelFlores = new List<string>(nlabels);
         var labelCounts = new List<long>(nlabels);
+        const string labelPrefix = "__label__";
         for (int i = 0; i < size; i++)
         {
             if (types[i] == 1)
@@ -203,57 +148,8 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             }
         }
 
-        // --- Input matrix: quantized (.ftz) or dense (.bin) ---
-        bool qinput = br.ReadBoolean();
-
-        long inputM; float[][]? dense = null;
-        int pqNsubq = 0, pqDsub = 0, pqLastDsub = 0;
-        float[] pqCentroids = [];
-        byte[] codes = [];
-        bool qnorm; float[]? normCentroids = null; byte[]? normCodes = null;
-
-        if (!qinput)
-        {
-            qnorm = false;
-            inputM = br.ReadInt64();
-            long inputN = br.ReadInt64();
-            dense = new float[inputM][];
-            for (long row = 0; row < inputM; row++)
-            {
-                var r = new float[inputN];
-                for (long k = 0; k < inputN; k++)
-                    r[k] = br.ReadSingle();
-                dense[row] = r;
-            }
-        }
-        else
-        {
-            // QMatrix::save order: qnorm, m, n, codesize, codes, then PQ metadata.
-            qnorm = br.ReadBoolean();
-            inputM = br.ReadInt64();
-            br.ReadInt64();                          // inputN = dim
-            int codesize = br.ReadInt32();
-            codes = br.ReadBytes(codesize);          // codes before PQ metadata
-
-            br.ReadInt32();                          // pqDimStored
-            pqNsubq = br.ReadInt32();
-            pqDsub = br.ReadInt32();
-            pqLastDsub = br.ReadInt32();
-            int centroidsCount = pqNsubq * KCENT * Math.Max(pqDsub, pqLastDsub);
-            pqCentroids = new float[centroidsCount];
-            for (int i = 0; i < centroidsCount; i++)
-                pqCentroids[i] = br.ReadSingle();
-
-            if (qnorm)
-            {
-                // QMatrix::save writes norm_codes before the norm PQ metadata.
-                normCodes = br.ReadBytes((int)inputM);
-                br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // norm PQ header
-                normCentroids = new float[KCENT];
-                for (int i = 0; i < KCENT; i++)
-                    normCentroids[i] = br.ReadSingle();
-            }
-        }
+        model = model with { Nwords = nwords };
+        var matrix = ReadInputMatrixSection(br);
 
         // --- Output matrix (full precision) ---
         br.ReadBoolean(); // output quant flag (always false)
@@ -263,21 +159,103 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         for (long i = 0; i < outM * outN; i++)
             output[i] = br.ReadSingle();
 
-        // Build Huffman tree for hierarchical softmax models.
-        // For softmax/ova/ns, simple argmax of dot products is used instead.
-        HsNode[]? hsTree = (loss == LOSS_HS)
-            ? BuildHuffmanTree(labelCounts.ToArray())
-            : null;
+        HsNode[]? hsTree = loss == LOSS_HS ? BuildHuffmanTree(labelCounts.ToArray()) : null;
 
         return new FastTextLanguageDetector(
-            dim, minn, maxn, bucket, nwords, labelPrefix,
-            wordToId,
-            pqNsubq, pqDsub, pqLastDsub, pqCentroids, codes, inputM,
-            qnorm, normCentroids, normCodes,
-            dense,
+            model, wordToId, matrix,
             output, labelFlores.ToArray(),
             hsTree,
             pruneidxSize > 0 ? ngramPruneidx : null);
+    }
+
+    private static (ModelParams model, int loss) ReadModelArgs(BinaryReader br)
+    {
+        // All current fastText models write: dim, ws, epoch, minCount, neg, wordNgrams,
+        // loss, model, bucket, minn, maxn, lrUpdateRate, t (double) — 12 ints + 1 double.
+        // Detect format by reading the first 8 bytes as double: valid lr is (1e-100, 100);
+        // near-zero means dim+ws bytes → rewind and read from offset 8.
+        double lr = br.ReadDouble();
+        if (lr is > 1e-100 and < 100.0)
+        {
+            // Older models stored lr before dim; also skip verbose/pretrainedVectors tail.
+            br.ReadInt32();            // lrUpdateRate
+            int dim = br.ReadInt32();
+            br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // ws epoch minCount neg
+            br.ReadInt32();            // wordNgrams
+            int loss = br.ReadInt32();
+            br.ReadInt32();            // model
+            int bucket = br.ReadInt32();
+            int minn = br.ReadInt32();
+            int maxn = br.ReadInt32();
+            br.ReadDouble();           // t
+            // verbose is always 0-5; dict size starts at 10 000+ — ranges don't overlap.
+            int maybeVerbose = br.ReadInt32();
+            if (maybeVerbose <= 5)
+                br.ReadBytes((int)br.ReadUInt32()); // pretrainedVectors path (skip)
+            else
+                br.BaseStream.Seek(-4, SeekOrigin.Current); // put back: it was dict size
+            return (new ModelParams(dim, minn, maxn, bucket, 0 /* nwords set from dict */), loss);
+        }
+
+        // Standard layout: dim starts at offset 8.
+        br.BaseStream.Seek(8, SeekOrigin.Begin);
+        {
+            int dim = br.ReadInt32();
+            br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // ws epoch minCount neg wordNgrams
+            int loss = br.ReadInt32();
+            br.ReadInt32();            // model
+            int bucket = br.ReadInt32();
+            int minn = br.ReadInt32();
+            int maxn = br.ReadInt32();
+            br.ReadInt32();            // nthreads (training-only)
+            br.ReadDouble();           // t
+            return (new ModelParams(dim, minn, maxn, bucket, 0), loss);
+        }
+    }
+
+    private static MatrixState ReadInputMatrixSection(BinaryReader br)
+    {
+        bool qinput = br.ReadBoolean();
+
+        if (!qinput)
+        {
+            long inputM = br.ReadInt64();
+            long inputN = br.ReadInt64();
+            var dense = new float[inputM][];
+            for (long row = 0; row < inputM; row++)
+            {
+                var r = new float[inputN];
+                for (long k = 0; k < inputN; k++) r[k] = br.ReadSingle();
+                dense[row] = r;
+            }
+            return new MatrixState(dense, inputM, 0, 0, 0, [], [], false, null, null);
+        }
+
+        // Quantized (QMatrix::save): qnorm, m, n, codesize, codes, then PQ metadata.
+        bool qnorm = br.ReadBoolean();
+        long qM = br.ReadInt64();
+        br.ReadInt64();                          // n = dim
+        int codesize = br.ReadInt32();
+        byte[] codes = br.ReadBytes(codesize);
+        br.ReadInt32();                          // pqDimStored
+        int pqNsubq = br.ReadInt32();
+        int pqDsub = br.ReadInt32();
+        int pqLastDsub = br.ReadInt32();
+        int centroidsCount = pqNsubq * KCENT * Math.Max(pqDsub, pqLastDsub);
+        float[] pqCentroids = new float[centroidsCount];
+        for (int i = 0; i < centroidsCount; i++) pqCentroids[i] = br.ReadSingle();
+
+        float[]? normCentroids = null;
+        byte[]? normCodes = null;
+        if (qnorm)
+        {
+            normCodes = br.ReadBytes((int)qM);
+            br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // norm PQ header
+            normCentroids = new float[KCENT];
+            for (int i = 0; i < KCENT; i++) normCentroids[i] = br.ReadSingle();
+        }
+
+        return new MatrixState(null, qM, pqNsubq, pqDsub, pqLastDsub, pqCentroids, codes, qnorm, normCentroids, normCodes);
     }
 
     // -------------------------------------------------------------------------
@@ -417,55 +395,52 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             count++;
         }
 
-        if (_maxn > 0)
-        {
-            int maxLen = Encoding.UTF8.GetMaxByteCount(word.Length) + 2;
-            byte[] rentedBuf = ArrayPool<byte>.Shared.Rent(maxLen);
-            try
-            {
-                rentedBuf[0] = (byte)'<';
-                int encoded = Encoding.UTF8.GetBytes(word, rentedBuf.AsSpan(1));
-                rentedBuf[encoded + 1] = (byte)'>';
-                int len = encoded + 2;
+        if (_maxn <= 0) return;
 
-                for (int i = 0; i < len; i++)
+        int maxLen = Encoding.UTF8.GetMaxByteCount(word.Length) + 2;
+        byte[] rentedBuf = ArrayPool<byte>.Shared.Rent(maxLen);
+        try
+        {
+            rentedBuf[0] = (byte)'<';
+            int encoded = Encoding.UTF8.GetBytes(word, rentedBuf.AsSpan(1));
+            rentedBuf[encoded + 1] = (byte)'>';
+            AddNgramFeatures(rentedBuf, encoded + 2, target, ref count);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rentedBuf);
+        }
+    }
+
+    private void AddNgramFeatures(byte[] buf, int len, float[] target, ref int count)
+    {
+        for (int i = 0; i < len; i++)
+        {
+            if ((buf[i] & 0xC0) == 0x80) continue;
+            int start = i;
+            int n = 0;
+            for (int j = i; j < len && n < _maxn;)
+            {
+                j++;
+                while (j < len && (buf[j] & 0xC0) == 0x80) j++;
+                n++;
+                if (n < _minn) continue;
+                int rowIdx = GetNgramRowIdx(FnvHash(buf.AsSpan(start, j - start)) % (uint)_bucket);
+                if (rowIdx >= 0)
                 {
-                    if ((rentedBuf[i] & 0xC0) == 0x80) continue;
-                    int start = i;
-                    int n = 0;
-                    for (int j = i; j < len && n < _maxn;)
-                    {
-                        j++;
-                        while (j < len && (rentedBuf[j] & 0xC0) == 0x80) j++;
-                        n++;
-                        if (n >= _minn)
-                        {
-                            uint h2 = FnvHash(rentedBuf.AsSpan(start, j - start)) % (uint)_bucket;
-                            int rowIdx;
-                            if (_ngramPruneidx != null)
-                            {
-                                if (!_ngramPruneidx.TryGetValue((int)h2, out int mapped))
-                                    continue;
-                                rowIdx = mapped + _nwords;
-                            }
-                            else
-                            {
-                                rowIdx = (int)h2 + _nwords;
-                            }
-                            if (rowIdx >= 0 && rowIdx < _inputRows)
-                            {
-                                AddRowEmbedding(rowIdx, target);
-                                count++;
-                            }
-                        }
-                    }
+                    AddRowEmbedding(rowIdx, target);
+                    count++;
                 }
             }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rentedBuf);
-            }
         }
+    }
+
+    private int GetNgramRowIdx(uint rawHash)
+    {
+        if (_ngramPruneidx != null)
+            return _ngramPruneidx.TryGetValue((int)rawHash, out int mapped) ? mapped + _nwords : -1;
+        int idx = (int)rawHash + _nwords;
+        return idx < _inputRows ? idx : -1;
     }
 
     private void AddRowEmbedding(int rowIdx, float[] target)
@@ -473,66 +448,54 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         if (_dense != null)
         {
             float[] row = _dense[rowIdx];
-            for (int k = 0; k < _dim; k++)
-                target[k] += row[k];
+            for (int k = 0; k < _dim; k++) target[k] += row[k];
             return;
         }
+        AddPqRowEmbedding(rowIdx, target);
+    }
 
+    private void AddPqRowEmbedding(int rowIdx, float[] target)
+    {
         int codeBase = rowIdx * _pqNsubq;
         int dimOffset = 0;
-
         for (int j = 0; j < _pqNsubq; j++)
         {
             int centroidIdx = _codes[codeBase + j];
-            int dsub = (j == _pqNsubq - 1) ? _pqLastDsub : _pqDsub;
+            int dsub = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
             int centBase = j < _pqNsubq - 1
                 ? (j * KCENT + centroidIdx) * _pqDsub
                 : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
-
-            for (int d = 0; d < dsub; d++)
-                target[dimOffset + d] += _pqCentroids[centBase + d];
+            for (int d = 0; d < dsub; d++) target[dimOffset + d] += _pqCentroids[centBase + d];
             dimOffset += dsub;
         }
 
-        if (_qnorm && _normCodes != null && _normCentroids != null)
+        if (!_qnorm || _normCodes == null || _normCentroids == null) return;
+
+        float norm = _normCentroids[_normCodes[rowIdx]];
+        dimOffset = 0;
+        for (int j = 0; j < _pqNsubq; j++)
         {
-            float norm = _normCentroids[_normCodes[rowIdx]];
-            dimOffset = 0;
-            for (int j = 0; j < _pqNsubq; j++)
-            {
-                int centroidIdx = _codes[codeBase + j];
-                int dsub = (j == _pqNsubq - 1) ? _pqLastDsub : _pqDsub;
-                int centBase = j < _pqNsubq - 1
-                    ? (j * KCENT + centroidIdx) * _pqDsub
-                    : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
-                for (int d = 0; d < dsub; d++)
-                    target[dimOffset + d] += _pqCentroids[centBase + d] * (norm - 1f);
-                dimOffset += dsub;
-            }
+            int centroidIdx = _codes[codeBase + j];
+            int dsub = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
+            int centBase = j < _pqNsubq - 1
+                ? (j * KCENT + centroidIdx) * _pqDsub
+                : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
+            for (int d = 0; d < dsub; d++) target[dimOffset + d] += _pqCentroids[centBase + d] * (norm - 1f);
+            dimOffset += dsub;
         }
     }
 
     // -------------------------------------------------------------------------
 
     private static readonly SearchValues<char> _whitespace =
-        SearchValues.Create([' ', '\t', '\n', '\r', '\f', '\v']);
+        SearchValues.Create(" \t\n\r\f\v");
 
     private static string ReadNullTerminated(BinaryReader br)
     {
         var bytes = new List<byte>();
-        try
-        {
-            byte b;
-            while (br.BaseStream.Position < br.BaseStream.Length && (b = br.ReadByte()) != 0)
-            {
-                bytes.Add(b);
-            }
-        }
-        catch (EndOfStreamException)
-        {
-            // TODO: Handle this more gracefully.
-        }
-
+        byte b;
+        while (br.BaseStream.Position < br.BaseStream.Length && (b = br.ReadByte()) != 0)
+            bytes.Add(b);
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 

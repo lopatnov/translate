@@ -69,9 +69,104 @@ public sealed class ModelSessionManagerTests
         var mock = new Mock<ITextTranslator>();
         using var mgr = Build(new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object });
 
-        // Should not throw.
-        _ = mgr.Get("nllb");
-        _ = mgr.Get("m2m100");
+        Assert.Same(mock.Object, mgr.Get("nllb"));
+        Assert.Same(mock.Object, mgr.Get("m2m100"));
+    }
+
+    // --- Rent() / TranslatorLease ---
+
+    [Fact]
+    public void Rent_ReturnsLease_WithCorrectTranslatorAndKey()
+    {
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["nllb"] = () => mock.Object });
+
+        using var lease = mgr.Rent("nllb");
+
+        Assert.Same(mock.Object, lease.Translator);
+        Assert.Equal("nllb", lease.Key);
+    }
+
+    [Fact]
+    public void Rent_ReturnsSameTranslatorInstance_AcrossLeases()
+    {
+        var callCount = 0;
+        using var mgr = Build(new() { ["nllb"] = () => { callCount++; return new Mock<ITextTranslator>().Object; } });
+
+        using var l1 = mgr.Rent("nllb");
+        using var l2 = mgr.Rent("nllb");
+
+        Assert.Same(l1.Translator, l2.Translator);
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public void Rent_IsCaseInsensitive()
+    {
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["NLLB"] = () => mock.Object });
+
+        using var lease = mgr.Rent("nllb");
+
+        Assert.Same(mock.Object, lease.Translator);
+    }
+
+    [Fact]
+    public void Rent_ThrowsKeyNotFoundException_ForUnknownProvider()
+    {
+        using var mgr = Build(new());
+
+        Assert.Throws<KeyNotFoundException>(() => mgr.Rent("unknown"));
+    }
+
+    [Fact]
+    public void Rent_ThrowsUnauthorizedAccess_ForNotAllowedProvider()
+    {
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(
+            new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object },
+            allowed: ["nllb"]);
+
+        Assert.Throws<UnauthorizedAccessException>(() => mgr.Rent("m2m100"));
+    }
+
+    [Fact]
+    public void TranslatorLease_Dispose_IsIdempotent()
+    {
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["nllb"] = () => mock.Object });
+
+        var lease = mgr.Rent("nllb");
+        lease.Dispose();
+
+        Assert.Null(Record.Exception(() => lease.Dispose()));
+    }
+
+    [Fact]
+    public void Dispose_DisposesTranslator_LoadedViaRent()
+    {
+        var mockDisposable = new Mock<ITextTranslator>();
+        mockDisposable.As<IDisposable>();
+
+        var mgr = Build(new() { ["nllb"] = () => mockDisposable.Object });
+        using (mgr.Rent("nllb")) { }
+
+        mgr.Dispose();
+
+        mockDisposable.As<IDisposable>().Verify(d => d.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public void Rent_AllowsProvider_WhenAllowlistIsEmpty()
+    {
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object });
+
+        using var l1 = mgr.Rent("nllb");
+        using var l2 = mgr.Rent("m2m100");
+
+        Assert.Same(mock.Object, l1.Translator);
+        Assert.Same(mock.Object, l2.Translator);
     }
 
     [Fact]

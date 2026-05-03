@@ -62,7 +62,6 @@ public sealed class ModelSessionManager : IDisposable
         }
 
         public ITextTranslator Translator => _lazy.Value;
-        public bool IsValueCreated => _lazy.IsValueCreated;
 
         // Returns false if the entry has already been evicted.
         public bool TryAcquire()

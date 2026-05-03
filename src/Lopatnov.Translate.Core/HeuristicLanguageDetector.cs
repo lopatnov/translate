@@ -17,11 +17,23 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
             return Language.EnglishLatin;
 
         var sample = text.Length > SampleLength ? text.AsSpan(0, SampleLength) : text.AsSpan();
+        CountScripts(sample,
+            out int cyrillic, out int latin, out int cjk,
+            out int arabic, out int kana, out int devanagari, out int thai,
+            out int ukSpecific, out int de, out int fr, out int es, out int pl);
 
-        int cyrillic = 0, latin = 0, cjk = 0, arabic = 0, hiragana = 0, katakana = 0,
-            devanagari = 0, thai = 0;
-        int ukSpecific = 0;
-        int de = 0, fr = 0, es = 0, pl = 0;
+        return SelectLanguage(cyrillic, latin, cjk, arabic, kana, devanagari, thai,
+            ukSpecific, de, fr, es, pl);
+    }
+
+    private static void CountScripts(ReadOnlySpan<char> sample,
+        out int cyrillic, out int latin, out int cjk,
+        out int arabic, out int kana, out int devanagari, out int thai,
+        out int ukSpecific, out int de, out int fr, out int es, out int pl)
+    {
+        cyrillic = latin = cjk = arabic = devanagari = thai = ukSpecific = 0;
+        de = fr = es = pl = 0;
+        int hiragana = 0, katakana = 0;
 
         foreach (var c in sample)
         {
@@ -45,34 +57,28 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
             else if (c is >= '฀' and <= '๿') thai++;
         }
 
-        // Dominant non-Latin script wins outright.
-        int kana = hiragana + katakana;
-        int scriptMax = Math.Max(Math.Max(cyrillic, arabic), Math.Max(devanagari, thai));
+        kana = hiragana + katakana;
+    }
 
+    private static string SelectLanguage(
+        int cyrillic, int latin, int cjk, int arabic, int kana,
+        int devanagari, int thai, int ukSpecific,
+        int de, int fr, int es, int pl)
+    {
         if (cyrillic > 0 && cyrillic >= latin && cyrillic >= cjk && cyrillic >= arabic)
             return ukSpecific > 0 ? Language.UkrainianCyrillic : Language.RussianCyrillic;
 
         if (cjk > latin)
             return kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
 
-        if (kana > latin && kana > cjk)
-            return Language.JapaneseJpan;
+        if (kana > latin && kana > cjk) return Language.JapaneseJpan;
+        if (arabic > latin) return Language.ArabicArab;
+        if (devanagari > latin) return Language.HindiDevanagari;
+        if (thai > latin) return Language.ThaiThai;
 
-        if (arabic > latin)
-            return Language.ArabicArab;
-
-        if (devanagari > latin)
-            return Language.HindiDevanagari;
-
-        if (thai > latin)
-            return Language.ThaiThai;
-
-        // Latin script: pick language with highest diacritic score.
         int maxScore = Math.Max(Math.Max(de, fr), Math.Max(es, pl));
-        if (maxScore == 0)
-            return Language.EnglishLatin;
+        if (maxScore == 0) return Language.EnglishLatin;
 
-        // Ties broken by priority: pl > de > fr > es
         if (pl == maxScore) return Language.PolishLatin;
         if (de == maxScore) return Language.GermanLatin;
         if (fr == maxScore) return Language.FrenchLatin;

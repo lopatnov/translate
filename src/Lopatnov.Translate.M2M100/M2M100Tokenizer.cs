@@ -13,12 +13,12 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     private const char SentencePiecePrefixChar = '▁'; // ▁ (U+2581) — SentencePiece word-boundary marker
 
     private readonly SentencePieceTokenizer _tokenizer;
-    private readonly IReadOnlyDictionary<string, long> _vocab;        // piece string → HF token ID
-    private readonly IReadOnlyDictionary<long, string> _reverseVocab; // HF token ID → piece string
-    private readonly IReadOnlyDictionary<string, long> _isoToTokenId; // ISO 639-1 lang code → token ID
+    private readonly Dictionary<string, long> _vocab;        // piece string → HF token ID
+    private readonly Dictionary<long, string> _reverseVocab; // HF token ID → piece string
+    private readonly Dictionary<string, long> _isoToTokenId; // ISO 639-1 lang code → token ID
 
     // Maps FLORES-200 codes used by ITextTranslator callers to M2M-100 ISO 639-1 codes.
-    private static readonly IReadOnlyDictionary<string, string> FlorestoIso =
+    private static readonly Dictionary<string, string> FlorestoIso =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["eng_Latn"] = "en", ["ukr_Cyrl"] = "uk", ["rus_Cyrl"] = "ru",
@@ -99,7 +99,7 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
 
     public void Dispose() { }
 
-    private static (IReadOnlyDictionary<string, long>, IReadOnlyDictionary<long, string>) LoadVocabJson(string path)
+    private static (Dictionary<string, long>, Dictionary<long, string>) LoadVocabJson(string path)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException(
@@ -120,7 +120,7 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
         return (vocab, reverse);
     }
 
-    private static IReadOnlyDictionary<string, long> LoadLanguageTokenIds(string configPath)
+    private static Dictionary<string, long> LoadLanguageTokenIds(string configPath)
     {
         if (!File.Exists(configPath))
             throw new FileNotFoundException(
