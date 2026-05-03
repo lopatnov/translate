@@ -1,4 +1,4 @@
-using Lopatnov.Translate.Core;
+using Lopatnov.Translate.Core.LanguageDetectors;
 
 namespace Lopatnov.Translate.Core.Tests;
 

@@ -1,6 +1,6 @@
 using Lopatnov.Translate.Core.Abstractions;
 
-namespace Lopatnov.Translate.Core;
+namespace Lopatnov.Translate.Core.LanguageDetectors;
 
 /// <summary>
 /// Lightweight language detector based on Unicode block analysis and Latin diacritic scoring.

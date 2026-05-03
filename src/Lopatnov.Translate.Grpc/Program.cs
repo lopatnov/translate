@@ -1,5 +1,6 @@
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Lopatnov.Translate.Core.LanguageDetectors;
 using Lopatnov.Translate.Grpc;
 using Lopatnov.Translate.Grpc.Services;
 using Lopatnov.Translate.LibreTranslate;

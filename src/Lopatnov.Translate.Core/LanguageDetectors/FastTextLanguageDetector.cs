@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Text;
 using Lopatnov.Translate.Core.Abstractions;
 
-namespace Lopatnov.Translate.Core;
+namespace Lopatnov.Translate.Core.LanguageDetectors;
 
 /// <summary>
 /// Language detector backed by a fastText supervised model (.ftz compressed or .bin full-precision).
