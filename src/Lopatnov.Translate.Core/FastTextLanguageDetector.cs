@@ -496,11 +496,11 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     private static string ReadNullTerminated(BinaryReader br)
     {
-        var sb = new StringBuilder();
-        char c;
-        while ((c = (char)br.ReadByte()) != '\0')
-            sb.Append(c);
-        return sb.ToString();
+        var bytes = new List<byte>();
+        byte b;
+        while ((b = br.ReadByte()) != 0)
+            bytes.Add(b);
+        return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
     private static uint FnvHash(ReadOnlySpan<byte> bytes)
