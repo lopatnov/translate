@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using Lopatnov.Translate.Core.Abstractions;
 
@@ -289,8 +290,17 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         var h = new float[_dim];
         int count = 0;
 
-        foreach (var token in Tokenize(text))
-            AddWordFeatures(token, h, ref count);
+        var remaining = text.AsSpan();
+        while (!remaining.IsEmpty)
+        {
+            int start = remaining.IndexOfAnyExcept(_whitespace);
+            if (start < 0) break;
+            remaining = remaining[start..];
+            int end = remaining.IndexOfAny(_whitespace);
+            var token = end < 0 ? remaining : remaining[..end];
+            remaining = end < 0 ? default : remaining[end..];
+            AddWordFeatures(token.ToString(), h, ref count);
+        }
 
         if (count == 0)
             return Language.EnglishLatin;
@@ -303,7 +313,9 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    // Prediction for hierarchical softmax (loss=hs): traverse the Huffman tree.
+    // Prediction for hierarchical softmax (loss=hs): full log-probability traversal.
+    // A greedy descent would be O(log N) but incorrect — the product of branch probabilities
+    // is not monotone so the best leaf may be in the "less likely" subtree at the root.
     private string PredictHs(float[] h)
     {
         int osz = _labels.Length;
@@ -407,39 +419,51 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
         if (_maxn > 0)
         {
-            var padded = Encoding.UTF8.GetBytes("<" + word + ">");
-            int len = padded.Length;
-            for (int i = 0; i < len; i++)
+            int maxLen = Encoding.UTF8.GetMaxByteCount(word.Length) + 2;
+            byte[] rentedBuf = ArrayPool<byte>.Shared.Rent(maxLen);
+            try
             {
-                if ((padded[i] & 0xC0) == 0x80) continue;
-                int start = i;
-                int n = 0;
-                for (int j = i; j < len && n < _maxn;)
+                rentedBuf[0] = (byte)'<';
+                int encoded = Encoding.UTF8.GetBytes(word, rentedBuf.AsSpan(1));
+                rentedBuf[encoded + 1] = (byte)'>';
+                int len = encoded + 2;
+
+                for (int i = 0; i < len; i++)
                 {
-                    j++;
-                    while (j < len && (padded[j] & 0xC0) == 0x80) j++;
-                    n++;
-                    if (n >= _minn)
+                    if ((rentedBuf[i] & 0xC0) == 0x80) continue;
+                    int start = i;
+                    int n = 0;
+                    for (int j = i; j < len && n < _maxn;)
                     {
-                        uint h2 = FnvHash(padded.AsSpan(start, j - start)) % (uint)_bucket;
-                        int rowIdx;
-                        if (_ngramPruneidx != null)
+                        j++;
+                        while (j < len && (rentedBuf[j] & 0xC0) == 0x80) j++;
+                        n++;
+                        if (n >= _minn)
                         {
-                            if (!_ngramPruneidx.TryGetValue((int)h2, out int mapped))
-                                continue; // n-gram not in pruned set
-                            rowIdx = mapped + _nwords;
-                        }
-                        else
-                        {
-                            rowIdx = (int)h2 + _nwords;
-                        }
-                        if (rowIdx >= 0 && rowIdx < _inputRows)
-                        {
-                            AddRowEmbedding(rowIdx, target);
-                            count++;
+                            uint h2 = FnvHash(rentedBuf.AsSpan(start, j - start)) % (uint)_bucket;
+                            int rowIdx;
+                            if (_ngramPruneidx != null)
+                            {
+                                if (!_ngramPruneidx.TryGetValue((int)h2, out int mapped))
+                                    continue;
+                                rowIdx = mapped + _nwords;
+                            }
+                            else
+                            {
+                                rowIdx = (int)h2 + _nwords;
+                            }
+                            if (rowIdx >= 0 && rowIdx < _inputRows)
+                            {
+                                AddRowEmbedding(rowIdx, target);
+                                count++;
+                            }
                         }
                     }
                 }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rentedBuf);
             }
         }
     }
@@ -490,9 +514,8 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    private static IEnumerable<string> Tokenize(string text)
-        => text.Split(new[] { ' ', '\t', '\n', '\r', '\f', '\v' },
-            StringSplitOptions.RemoveEmptyEntries);
+    private static readonly SearchValues<char> _whitespace =
+        SearchValues.Create([' ', '\t', '\n', '\r', '\f', '\v']);
 
     private static string ReadNullTerminated(BinaryReader br)
     {

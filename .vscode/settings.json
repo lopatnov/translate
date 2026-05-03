@@ -32,5 +32,9 @@
   },
   "files.associations": {
     "appsettings*.json": "jsonc"
+  },
+  "sonarlint.connectedMode.project": {
+    "connectionId": "lopatnov",
+    "projectKey": "lopatnov_translate"
   }
 }

@@ -25,7 +25,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var (translator, providerKey) = ResolveTranslator(request.Model);
+        using var lease = ResolveTranslator(request.Model);
 
         var sourceLanguage = request.SourceLanguage;
         string? detectedLanguage = null;
@@ -37,7 +37,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             sourceLanguage = detectedLanguage;
         }
 
-        var translated = await translator.TranslateAsync(
+        var translated = await lease.Translator.TranslateAsync(
             request.Text,
             sourceLanguage,
             request.TargetLanguage,
@@ -47,7 +47,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             TranslatedText = translated,
             DetectedLanguage = detectedLanguage ?? string.Empty,
-            ModelUsed = providerKey,
+            ModelUsed = lease.Key,
         };
     }
 
@@ -66,13 +66,13 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateLocalizationResponse> TranslateLocalization(
         TranslateLocalizationRequest request, ServerCallContext context)
     {
-        var (translator, _) = ResolveTranslator(request.Model);
+        using var lease = ResolveTranslator(request.Model);
 
         try
         {
             var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
                 request.Json,
-                translator,
+                lease.Translator,
                 request.SourceLanguage,
                 request.TargetLanguage,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
@@ -106,12 +106,12 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         TranslateAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 4"));
 
-    private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
+    private ModelSessionManager.TranslatorLease ResolveTranslator(string? provider)
     {
         var key = string.IsNullOrWhiteSpace(provider) ? _defaultModel : provider.Trim();
         try
         {
-            return (_manager.Get(key), key);
+            return _manager.Rent(key);
         }
         catch (KeyNotFoundException)
         {

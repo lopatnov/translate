@@ -1,3 +1,4 @@
+using System.Buffers;
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.M2M100.Abstractions;
 using Microsoft.Extensions.Options;
@@ -67,28 +68,35 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
 
         var targetLangId = _tokenizer.GetLanguageTokenId(targetLanguage);
 
-        // Pre-allocate full decoder buffer to avoid per-step array allocations.
+        // Rent a decoder buffer from the pool to avoid per-request heap allocation.
         // Layout: [EOS, tgt_lang_id, ...generated tokens...]
-        var decoderBuf = new long[_options.MaxTokens + 2];
-        decoderBuf[0] = M2M100Tokenizer.EosTokenId;
-        decoderBuf[1] = targetLangId;
-        var decoderCount = 2;
-
-        // CancellationToken is only checked between decode steps; ONNX calls are not interruptible mid-run.
-        for (var step = 0; step < _options.MaxTokens; step++)
+        var decoderBuf = ArrayPool<long>.Shared.Rent(_options.MaxTokens + 2);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            decoderBuf[0] = M2M100Tokenizer.EosTokenId;
+            decoderBuf[1] = targetLangId;
+            var decoderCount = 2;
 
-            var nextToken = RunDecoderStep(decoderBuf, decoderCount, encoderHiddenState!, attentionMask);
+            // CancellationToken is only checked between decode steps; ONNX calls are not interruptible mid-run.
+            for (var step = 0; step < _options.MaxTokens; step++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            if (nextToken == M2M100Tokenizer.EosTokenId)
-                break;
+                var nextToken = RunDecoderStep(decoderBuf, decoderCount, encoderHiddenState!, attentionMask);
 
-            decoderBuf[decoderCount++] = nextToken;
+                if (nextToken == M2M100Tokenizer.EosTokenId)
+                    break;
+
+                decoderBuf[decoderCount++] = nextToken;
+            }
+
+            // Skip decoder_start_token (EOS) and forced target-lang BOS
+            return _tokenizer.Decode(new ArraySegment<long>(decoderBuf, 2, decoderCount - 2));
         }
-
-        // Skip decoder_start_token (EOS) and forced target-lang BOS
-        return _tokenizer.Decode(new ArraySegment<long>(decoderBuf, 2, decoderCount - 2));
+        finally
+        {
+            ArrayPool<long>.Shared.Return(decoderBuf);
+        }
     }
 
     public void Dispose()
