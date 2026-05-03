@@ -8,8 +8,8 @@ namespace Lopatnov.Translate.Grpc.Tests;
 
 public sealed class TranslateGrpcServiceTests
 {
-    private static readonly ILanguageDetector NoDetector = new Mock<ILanguageDetector>().Object;
-    private static ILanguageDetector WithDetector(ILanguageDetector d) => d;
+    private static readonly Lazy<ILanguageDetector> NoDetector = new(() => new Mock<ILanguageDetector>().Object);
+    private static Lazy<ILanguageDetector> WithDetector(ILanguageDetector d) => new(() => d);
 
     private static ModelSessionManager SingleProviderManager(string key, ITextTranslator translator)
         => new(
