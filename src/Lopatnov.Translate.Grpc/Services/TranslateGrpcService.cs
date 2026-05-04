@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Lopatnov.Translate.Core.LanguageDetectors;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
@@ -27,26 +28,38 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
+        var langFormat = request.LanguageFormat;
         var sourceLanguage = request.SourceLanguage;
-        string? detectedLanguage = null;
+        string? detectedFlores = null;
 
         if (string.IsNullOrWhiteSpace(sourceLanguage) ||
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            detectedLanguage = _detector.Value.Detect(request.Text);
-            sourceLanguage = detectedLanguage;
+            var detection = _detector.Value.Detect(request.Text);
+            detectedFlores = detection.Flores200;
+            sourceLanguage = detectedFlores;
         }
+        else
+        {
+            sourceLanguage = LanguageCodeConverter.Convert(sourceLanguage, langFormat, "flores200");
+        }
+
+        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, "flores200");
 
         var translated = await lease.Translator.TranslateAsync(
             request.Text,
             sourceLanguage,
-            request.TargetLanguage,
+            targetLanguage,
             context.CancellationToken);
+
+        var detectedInFormat = detectedFlores != null
+            ? LanguageCodeConverter.Convert(detectedFlores, "flores200", langFormat)
+            : string.Empty;
 
         return new TranslateTextResponse
         {
             TranslatedText = translated,
-            DetectedLanguage = detectedLanguage ?? string.Empty,
+            DetectedLanguage = detectedInFormat,
             ModelUsed = lease.Key,
         };
     }
@@ -68,13 +81,17 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
+        var langFormat = request.LanguageFormat;
+        var sourceLanguage = LanguageCodeConverter.Convert(request.SourceLanguage, langFormat, "flores200");
+        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, "flores200");
+
         try
         {
             var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
                 request.Json,
                 lease.Translator,
-                request.SourceLanguage,
-                request.TargetLanguage,
+                sourceLanguage,
+                targetLanguage,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
                 string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
                 context.CancellationToken);
@@ -90,7 +107,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override Task<DetectLanguageResponse> DetectLanguage(
         DetectLanguageRequest request, ServerCallContext context)
     {
-        var language = _detector.Value.Detect(request.Text);
+        var detection = _detector.Value.Detect(request.Text);
+        var language = detection.ToFormat(request.LanguageFormat);
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
 

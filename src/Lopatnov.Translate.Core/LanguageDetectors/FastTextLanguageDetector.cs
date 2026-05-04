@@ -260,10 +260,10 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    public string Detect(string text)
+    public LanguageDetectionResult Detect(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return Language.EnglishLatin;
+            return new LanguageDetectionResult(Language.EnglishLatin, "flores200");
 
         var h = new float[_dim];
         int count = 0;
@@ -281,12 +281,14 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         }
 
         if (count == 0)
-            return Language.EnglishLatin;
+            return new LanguageDetectionResult(Language.EnglishLatin, "flores200");
 
         for (int i = 0; i < _dim; i++)
             h[i] /= count;
 
-        return _hsTree != null ? PredictHs(h) : PredictArgmax(h);
+        return new LanguageDetectionResult(
+            _hsTree != null ? PredictHs(h) : PredictArgmax(h),
+            "flores200");
     }
 
     // -------------------------------------------------------------------------
@@ -515,174 +517,6 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     private static string MapToFlores(string label, string prefix)
     {
         var iso = label.StartsWith(prefix, StringComparison.Ordinal) ? label[prefix.Length..] : label;
-        return IsoToFlores.TryGetValue(iso, out var flores) ? flores : iso;
+        return LanguageCodeConverter.IsoLabelToFlores200(iso);
     }
-
-    private static readonly Dictionary<string, string> IsoToFlores =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            // --- ISO 639-1 (fastText LID-176) ---
-            ["en"] = "eng_Latn",
-            ["de"] = "deu_Latn",
-            ["fr"] = "fra_Latn",
-            ["es"] = "spa_Latn",
-            ["it"] = "ita_Latn",
-            ["pt"] = "por_Latn",
-            ["nl"] = "nld_Latn",
-            ["pl"] = "pol_Latn",
-            ["cs"] = "ces_Latn",
-            ["sk"] = "slk_Latn",
-            ["sl"] = "slv_Latn",
-            ["hu"] = "hun_Latn",
-            ["ro"] = "ron_Latn",
-            ["bg"] = "bul_Cyrl",
-            ["hr"] = "hrv_Latn",
-            ["sr"] = "srp_Cyrl",
-            ["ru"] = "rus_Cyrl",
-            ["uk"] = "ukr_Cyrl",
-            ["be"] = "bel_Cyrl",
-            ["mk"] = "mkd_Cyrl",
-            ["bs"] = "bos_Latn",
-            ["lt"] = "lit_Latn",
-            ["lv"] = "lvs_Latn",
-            ["et"] = "est_Latn",
-            ["fi"] = "fin_Latn",
-            ["sv"] = "swe_Latn",
-            ["no"] = "nob_Latn",
-            ["da"] = "dan_Latn",
-            ["tr"] = "tur_Latn",
-            ["az"] = "azj_Latn",
-            ["kk"] = "kaz_Cyrl",
-            ["ky"] = "kir_Cyrl",
-            ["uz"] = "uzn_Latn",
-            ["tg"] = "tgk_Cyrl",
-            ["ar"] = "arb_Arab",
-            ["fa"] = "pes_Arab",
-            ["ur"] = "urd_Arab",
-            ["hi"] = "hin_Deva",
-            ["bn"] = "ben_Beng",
-            ["mr"] = "mar_Deva",
-            ["ta"] = "tam_Taml",
-            ["te"] = "tel_Telu",
-            ["ml"] = "mal_Mlym",
-            ["kn"] = "kan_Knda",
-            ["gu"] = "guj_Gujr",
-            ["pa"] = "pan_Guru",
-            ["ne"] = "npi_Deva",
-            ["si"] = "sin_Sinh",
-            ["zh"] = "zho_Hans",
-            ["ja"] = "jpn_Jpan",
-            ["ko"] = "kor_Hang",
-            ["vi"] = "vie_Latn",
-            ["th"] = "tha_Thai",
-            ["km"] = "khm_Khmr",
-            ["lo"] = "lao_Laoo",
-            ["my"] = "mya_Mymr",
-            ["ka"] = "kat_Geor",
-            ["hy"] = "hye_Armn",
-            ["he"] = "heb_Hebr",
-            ["id"] = "ind_Latn",
-            ["ms"] = "zsm_Latn",
-            ["tl"] = "tgl_Latn",
-            ["sw"] = "swh_Latn",
-            ["cy"] = "cym_Latn",
-            ["eu"] = "eus_Latn",
-            ["gl"] = "glg_Latn",
-            ["ca"] = "cat_Latn",
-            ["af"] = "afr_Latn",
-            ["is"] = "isl_Latn",
-            ["mt"] = "mlt_Latn",
-            ["sq"] = "als_Latn",
-            ["mn"] = "khk_Cyrl",
-            ["jv"] = "jav_Latn",
-            ["su"] = "sun_Latn",
-            ["mg"] = "plt_Latn",
-            ["eo"] = "epo_Latn",
-
-            // --- ISO 639-3 (GlotLID) ---
-            ["eng"] = "eng_Latn",
-            ["deu"] = "deu_Latn",
-            ["fra"] = "fra_Latn",
-            ["spa"] = "spa_Latn",
-            ["ita"] = "ita_Latn",
-            ["por"] = "por_Latn",
-            ["nld"] = "nld_Latn",
-            ["pol"] = "pol_Latn",
-            ["ces"] = "ces_Latn",
-            ["slk"] = "slk_Latn",
-            ["slv"] = "slv_Latn",
-            ["hun"] = "hun_Latn",
-            ["ron"] = "ron_Latn",
-            ["bul"] = "bul_Cyrl",
-            ["hrv"] = "hrv_Latn",
-            ["srp"] = "srp_Cyrl",
-            ["rus"] = "rus_Cyrl",
-            ["ukr"] = "ukr_Cyrl",
-            ["bel"] = "bel_Cyrl",
-            ["mkd"] = "mkd_Cyrl",
-            ["bos"] = "bos_Latn",
-            ["lit"] = "lit_Latn",
-            ["lav"] = "lvs_Latn",
-            ["est"] = "est_Latn",
-            ["fin"] = "fin_Latn",
-            ["swe"] = "swe_Latn",
-            ["nob"] = "nob_Latn",
-            ["nno"] = "nno_Latn",
-            ["dan"] = "dan_Latn",
-            ["tur"] = "tur_Latn",
-            ["aze"] = "azj_Latn",
-            ["kaz"] = "kaz_Cyrl",
-            ["kir"] = "kir_Cyrl",
-            ["uzb"] = "uzn_Latn",
-            ["tgk"] = "tgk_Cyrl",
-            ["ara"] = "arb_Arab",
-            ["fas"] = "pes_Arab",
-            ["urd"] = "urd_Arab",
-            ["hin"] = "hin_Deva",
-            ["ben"] = "ben_Beng",
-            ["mar"] = "mar_Deva",
-            ["tam"] = "tam_Taml",
-            ["tel"] = "tel_Telu",
-            ["mal"] = "mal_Mlym",
-            ["kan"] = "kan_Knda",
-            ["guj"] = "guj_Gujr",
-            ["pan"] = "pan_Guru",
-            ["nep"] = "npi_Deva",
-            ["sin"] = "sin_Sinh",
-            ["zho"] = "zho_Hans",
-            ["cmn"] = "zho_Hans",
-            ["yue"] = "yue_Hant",
-            ["jpn"] = "jpn_Jpan",
-            ["kor"] = "kor_Hang",
-            ["vie"] = "vie_Latn",
-            ["tha"] = "tha_Thai",
-            ["khm"] = "khm_Khmr",
-            ["lao"] = "lao_Laoo",
-            ["mya"] = "mya_Mymr",
-            ["kat"] = "kat_Geor",
-            ["hye"] = "hye_Armn",
-            ["heb"] = "heb_Hebr",
-            ["ind"] = "ind_Latn",
-            ["zsm"] = "zsm_Latn",
-            ["msa"] = "zsm_Latn",
-            ["tgl"] = "tgl_Latn",
-            ["swa"] = "swh_Latn",
-            ["cym"] = "cym_Latn",
-            ["eus"] = "eus_Latn",
-            ["glg"] = "glg_Latn",
-            ["cat"] = "cat_Latn",
-            ["afr"] = "afr_Latn",
-            ["isl"] = "isl_Latn",
-            ["mlt"] = "mlt_Latn",
-            ["sqi"] = "als_Latn",
-            ["khk"] = "khk_Cyrl",
-            ["mon"] = "khk_Cyrl",
-            ["jav"] = "jav_Latn",
-            ["sun"] = "sun_Latn",
-            ["mlg"] = "plt_Latn",
-            ["epo"] = "epo_Latn",
-            ["swh"] = "swh_Latn",
-            ["lvs"] = "lvs_Latn",
-            ["npi"] = "npi_Deva",
-        };
 }

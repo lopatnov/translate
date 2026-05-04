@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Lopatnov.Translate.Core.LanguageDetectors;
 using Lopatnov.Translate.Grpc.Services;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -35,6 +36,7 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
+            // FLORES-200 codes pass through unchanged when not found in BCP-47 dict
             Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = provider,
         }, ctx.Object);
 
@@ -74,7 +76,7 @@ public sealed class TranslateGrpcServiceTests
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
-            svc.TranslateText(new TranslateTextRequest { Model ="unknown" }, ctx.Object));
+            svc.TranslateText(new TranslateTextRequest { Model = "unknown" }, ctx.Object));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
@@ -98,7 +100,7 @@ public sealed class TranslateGrpcServiceTests
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
             svc.TranslateText(new TranslateTextRequest
             {
-                Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model ="m2m100",
+                Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = "m2m100",
             }, ctx.Object));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
@@ -116,20 +118,68 @@ public sealed class TranslateGrpcServiceTests
             .ReturnsAsync("translated");
 
         var mockDetector = new Mock<ILanguageDetector>();
-        mockDetector.Setup(d => d.Detect("hello")).Returns("ukr_Cyrl");
+        mockDetector.Setup(d => d.Detect("hello"))
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        // Default language_format is "" = bcp47, so detected_language in response is BCP-47.
+        var response = await svc.TranslateText(new TranslateTextRequest
+        {
+            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "eng_Latn", Model = "nllb",
+        }, ctx.Object);
+
+        mockDetector.Verify(d => d.Detect("hello"), Times.Once);
+        Assert.Equal("uk", response.DetectedLanguage);
+        mockTranslator.Verify(
+            t => t.TranslateAsync("hello", "ukr_Cyrl", "eng_Latn", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task TranslateText_CallsDetector_Flores200Format_PreservesFloresInResponse()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("translated");
+
+        var mockDetector = new Mock<ILanguageDetector>();
+        mockDetector.Setup(d => d.Detect("hello"))
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
 
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "eng_Latn", Model ="nllb",
+            Text = "hello", SourceLanguage = "auto", TargetLanguage = "eng_Latn",
+            Model = "nllb", LanguageFormat = "flores200",
         }, ctx.Object);
 
-        mockDetector.Verify(d => d.Detect("hello"), Times.Once);
         Assert.Equal("ukr_Cyrl", response.DetectedLanguage);
+    }
+
+    [Fact]
+    public async Task TranslateText_ConvertsBcp47InputToFlores200ForTranslator()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Привіт");
+
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        await svc.TranslateText(new TranslateTextRequest
+        {
+            Text = "Hello", SourceLanguage = "en", TargetLanguage = "uk",
+            Model = "nllb", LanguageFormat = "bcp47",
+        }, ctx.Object);
+
         mockTranslator.Verify(
-            t => t.TranslateAsync("hello", "ukr_Cyrl", "eng_Latn", It.IsAny<CancellationToken>()),
+            t => t.TranslateAsync("Hello", "eng_Latn", "ukr_Cyrl", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -148,10 +198,48 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model ="nllb",
+            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = "nllb",
         }, ctx.Object);
 
         mockDetector.Verify(d => d.Detect(It.IsAny<string>()), Times.Never);
         Assert.Equal(string.Empty, response.DetectedLanguage);
+    }
+
+    [Fact]
+    public async Task DetectLanguage_ReturnsBcp47_ByDefault()
+    {
+        var mockDetector = new Mock<ILanguageDetector>();
+        mockDetector.Setup(d => d.Detect("Привіт"))
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
+            WithDetector(mockDetector.Object),
+            TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var response = await svc.DetectLanguage(new DetectLanguageRequest { Text = "Привіт" }, ctx.Object);
+
+        Assert.Equal("uk", response.Language);
+    }
+
+    [Fact]
+    public async Task DetectLanguage_ReturnsFlores200_WhenRequested()
+    {
+        var mockDetector = new Mock<ILanguageDetector>();
+        mockDetector.Setup(d => d.Detect("Привіт"))
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
+            WithDetector(mockDetector.Object),
+            TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var response = await svc.DetectLanguage(
+            new DetectLanguageRequest { Text = "Привіт", LanguageFormat = "flores200" },
+            ctx.Object);
+
+        Assert.Equal("ukr_Cyrl", response.Language);
     }
 }

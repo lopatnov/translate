@@ -91,7 +91,7 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         autoDetectName, cfgType, modelPath);
     try
     {
-        return FastTextLanguageDetector.Load(modelPath);
+        return new NativeFastTextLanguageDetector(modelPath);
     }
     catch (Exception ex)
     {

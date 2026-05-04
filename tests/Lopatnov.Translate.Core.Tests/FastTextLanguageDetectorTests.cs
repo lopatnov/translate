@@ -109,16 +109,25 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     : IClassFixture<FastTextDetectorFixture>
 {
     [IntegrationTheory]
-    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl")]
-    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl")]
-    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn")]
-    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn")]
-    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn")]
-    [InlineData("北京是中华人民共和国的首都，也是中国的政治、文化和经济中心。", "cmn_Hani")]
-    [InlineData("مرحباً بكم في بغداد، عاصمة جمهورية العراق وأكبر مدنها وأعرقها.", "arb_Arab")]
-    public void Detect_ReturnsExpectedLanguage(string text, string expected)
+    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl", "uk")]
+    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl", "ru")]
+    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn", "de")]
+    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn", "fr")]
+    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn", "en")]
+    [InlineData("مرحباً بكم في بغداد، عاصمة جمهورية العراق وأكبر مدنها وأعرقها.", "arb_Arab", "ar")]
+    public void Detect_ReturnsExpectedLanguage(string text, string expectedFlores, string expectedBcp47)
     {
-        Assert.Equal(expected, fixture.Detector!.Detect(text));
+        var result = fixture.Detector!.Detect(text);
+        Assert.Equal(expectedFlores, result.NativeCode);
+        Assert.Equal("flores200", result.NativeFormat);
+        Assert.Equal(expectedBcp47, result.Bcp47);
+    }
+
+    [IntegrationTheory]
+    [InlineData("北京是中华人民共和国的首都，也是中国的政治、文化和经济中心。", "zh-Hans")]
+    public void Detect_Chinese_ReturnsBcp47(string text, string expectedBcp47)
+    {
+        Assert.Equal(expectedBcp47, fixture.Detector!.Detect(text).Bcp47);
     }
 
     [IntegrationTheory]
@@ -127,14 +136,16 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     [InlineData(null!)]
     public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
     {
-        Assert.Equal(Language.EnglishLatin, fixture.Detector!.Detect(text!));
+        var result = fixture.Detector!.Detect(text!);
+        Assert.Equal(Language.EnglishLatin, result.NativeCode);
+        Assert.Equal("en", result.Bcp47);
     }
 
     [IntegrationFact]
     public void Detect_IsDeterministic()
     {
         const string text = "Исследователи открыли новые звёзды в далёких галактиках.";
-        Assert.Equal(fixture.Detector!.Detect(text), fixture.Detector.Detect(text));
+        Assert.Equal(fixture.Detector!.Detect(text).NativeCode, fixture.Detector.Detect(text).NativeCode);
     }
 }
 
@@ -145,17 +156,19 @@ public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture
     : IClassFixture<FastTextLid176Fixture>
 {
     [Lid176Theory]
-    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn")]
-    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn")]
-    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn")]
-    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl")]
-    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl")]
-    [InlineData("Los investigadores descubrieron nuevas estrellas en galaxias lejanas utilizando un telescopio moderno.", "spa_Latn")]
-    [InlineData("Gli scienziati hanno scoperto nuove stelle in galassie lontane usando un telescopio moderno.", "ita_Latn")]
-    [InlineData("Onderzoekers ontdekten nieuwe sterren in verre sterrenstelsels met behulp van een moderne telescoop.", "nld_Latn")]
-    public void Detect_ReturnsExpectedLanguage_LongText(string text, string expected)
+    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn", "de")]
+    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn", "fr")]
+    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn", "en")]
+    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl", "ru")]
+    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl", "uk")]
+    [InlineData("Los investigadores descubrieron nuevas estrellas en galaxias lejanas utilizando un telescopio moderno.", "spa_Latn", "es")]
+    [InlineData("Gli scienziati hanno scoperto nuove stelle in galassie lontane usando un telescopio moderno.", "ita_Latn", "it")]
+    [InlineData("Onderzoekers ontdekten nieuwe sterren in verre sterrenstelsels met behulp van een moderne telescoop.", "nld_Latn", "nl")]
+    public void Detect_ReturnsExpectedLanguage_LongText(string text, string expectedFlores, string expectedBcp47)
     {
-        Assert.Equal(expected, fixture.Detector!.Detect(text));
+        var result = fixture.Detector!.Detect(text);
+        Assert.Equal(expectedFlores, result.NativeCode);
+        Assert.Equal(expectedBcp47, result.Bcp47);
     }
 
     [Lid176Theory]
@@ -163,9 +176,9 @@ public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture
     [InlineData("Bonjour le monde", "fra_Latn")]
     [InlineData("Hello world", "eng_Latn")]
     [InlineData("Привет мир", "rus_Cyrl")]
-    public void Detect_ReturnsExpectedLanguage_ShortPhrase(string text, string expected)
+    public void Detect_ReturnsExpectedNativeCode_ShortPhrase(string text, string expectedFlores)
     {
-        Assert.Equal(expected, fixture.Detector!.Detect(text));
+        Assert.Equal(expectedFlores, fixture.Detector!.Detect(text).NativeCode);
     }
 
     [Lid176Theory]
@@ -174,13 +187,13 @@ public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture
     [InlineData(null!)]
     public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
     {
-        Assert.Equal(Language.EnglishLatin, fixture.Detector!.Detect(text!));
+        Assert.Equal(Language.EnglishLatin, fixture.Detector!.Detect(text!).NativeCode);
     }
 
     [Lid176Fact]
     public void Detect_IsDeterministic()
     {
         const string text = "Das Wetter in Berlin ist heute sehr schön.";
-        Assert.Equal(fixture.Detector!.Detect(text), fixture.Detector.Detect(text));
+        Assert.Equal(fixture.Detector!.Detect(text).NativeCode, fixture.Detector.Detect(text).NativeCode);
     }
 }
