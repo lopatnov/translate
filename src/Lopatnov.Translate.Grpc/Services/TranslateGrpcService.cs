@@ -28,7 +28,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
-        var langFormat = request.LanguageFormat;
+        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
         var sourceLanguage = request.SourceLanguage;
         string? detectedFlores = null;
 
@@ -41,10 +41,10 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
         else
         {
-            sourceLanguage = LanguageCodeConverter.Convert(sourceLanguage, langFormat, "flores200");
+            sourceLanguage = LanguageCodeConverter.Convert(sourceLanguage, langFormat, LanguageCodeFormat.Flores200);
         }
 
-        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, "flores200");
+        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         var translated = await lease.Translator.TranslateAsync(
             request.Text,
@@ -53,7 +53,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             context.CancellationToken);
 
         var detectedInFormat = detectedFlores != null
-            ? LanguageCodeConverter.Convert(detectedFlores, "flores200", langFormat)
+            ? LanguageCodeConverter.Convert(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
             : string.Empty;
 
         return new TranslateTextResponse
@@ -81,9 +81,9 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
-        var langFormat = request.LanguageFormat;
-        var sourceLanguage = LanguageCodeConverter.Convert(request.SourceLanguage, langFormat, "flores200");
-        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, "flores200");
+        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
+        var sourceLanguage = LanguageCodeConverter.Convert(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         try
         {
@@ -108,7 +108,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         DetectLanguageRequest request, ServerCallContext context)
     {
         var detection = _detector.Value.Detect(request.Text);
-        var language = detection.ToFormat(request.LanguageFormat);
+        var langFormat = string.IsNullOrEmpty(request.LanguageFormat) ? LanguageCodeFormat.Bcp47 : request.LanguageFormat.ToLanguageCodeFormat();
+        var language = detection.ToFormat(langFormat);
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
 

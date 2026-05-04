@@ -17,6 +17,9 @@ public sealed class ModelConfig
 {
     public string Type { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
+    public string LabelFormat { get; set; } = string.Empty;
+    public string LabelPrefix { get; set; } = string.Empty;
+    public string LabelSuffix { get; set; } = string.Empty;
     public string EncoderFile { get; set; } = "encoder_model.onnx";
     public string DecoderFile { get; set; } = "decoder_model.onnx";
     public string TokenizerFile { get; set; } = "sentencepiece.bpe.model";

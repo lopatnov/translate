@@ -119,7 +119,7 @@ public sealed class TranslateGrpcServiceTests
 
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("hello"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
@@ -147,7 +147,7 @@ public sealed class TranslateGrpcServiceTests
 
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("hello"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
@@ -210,7 +210,7 @@ public sealed class TranslateGrpcServiceTests
     {
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("Привіт"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
         var svc = new TranslateGrpcService(
             SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
@@ -228,7 +228,7 @@ public sealed class TranslateGrpcServiceTests
     {
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("Привіт"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", "flores200"));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
         var svc = new TranslateGrpcService(
             SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),

@@ -66,7 +66,6 @@ builder.Services.AddOptions<TranslationOptions>()
 var autoDetectName = builder.Configuration["Translation:AutoDetect"] ?? string.Empty;
 builder.Services.AddSingleton<ILanguageDetector>(sp =>
 {
-    var log = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
     if (string.IsNullOrWhiteSpace(autoDetectName))
     {
         sp.GetRequiredService<ILogger<Program>>()
@@ -79,19 +78,29 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
           .LogError("Translation:AutoDetect references unknown model '{Name}' — using heuristic language detector", autoDetectName);
         return new HeuristicLanguageDetector();
     }
+
     var modelPath = ResolvePath(cfg.Path);
+    var log = sp.GetRequiredService<ILogger<NativeFastTextLanguageDetector>>();
+
     if (string.IsNullOrWhiteSpace(modelPath) || !File.Exists(modelPath))
     {
         log.LogWarning("LangDetect model '{Name}' not found at {Path} — using heuristic language detector",
             autoDetectName, modelPath);
         return new HeuristicLanguageDetector();
     }
+
     var cfgType = cfg.Type;
     log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
         autoDetectName, cfgType, modelPath);
     try
     {
-        return new NativeFastTextLanguageDetector(modelPath);
+        return new NativeFastTextLanguageDetector(new NativeFastTextLanguageDetectorSettings
+        {
+            ModelPath = modelPath,
+            LabelFormat = cfg.LabelFormat?.ToLanguageCodeFormat() ?? LanguageCodeFormat.Native,
+            LabelPrefix = cfg.LabelPrefix ?? "__label__",
+            LabelSuffix = cfg.LabelSuffix,
+        });
     }
     catch (Exception ex)
     {

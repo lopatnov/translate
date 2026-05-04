@@ -36,6 +36,7 @@ message DetectLanguageRequest {
 
 message DetectLanguageResponse {
   string language = 1;
+  float probability = 2;
 }
 
 message TranslateLocalizationRequest {

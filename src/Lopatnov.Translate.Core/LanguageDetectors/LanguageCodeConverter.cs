@@ -6,47 +6,36 @@ namespace Lopatnov.Translate.Core.LanguageDetectors;
 /// </summary>
 public static class LanguageCodeConverter
 {
+    private static readonly string DefaultFloreCode = "eng_Latn";
+    private static readonly string DefaultBcp47Code = "en";
+
     /// <summary>
     /// Converts <paramref name="code"/> from <paramref name="fromFormat"/> to <paramref name="toFormat"/>.
     /// Supported format strings: "bcp47" (default when empty), "flores200", "native".
     /// Unknown codes are returned unchanged.
     /// </summary>
-    public static string Convert(string code, string fromFormat, string toFormat)
+    public static string Convert(string code, LanguageCodeFormat fromFormat, LanguageCodeFormat toFormat)
     {
-        if (string.IsNullOrEmpty(code)) return code;
+        if (string.IsNullOrEmpty(code) || fromFormat == toFormat || toFormat == LanguageCodeFormat.Native || toFormat == LanguageCodeFormat.None) return code;
 
-        var from = ParseFormat(fromFormat);
-        var to = ParseFormat(toFormat);
-
-        if (from == to || to == LanguageCodeFormat.Native) return code;
-
-        string flores = from switch
+        string flores = fromFormat switch
         {
+            LanguageCodeFormat.None => DefaultFloreCode,
             LanguageCodeFormat.Flores200 => code,
-            LanguageCodeFormat.Bcp47 => _bcp47ToFlores200.GetValueOrDefault(code, code),
+            LanguageCodeFormat.ISO639_1 => code,
+            LanguageCodeFormat.ISO639_2 => code,
+            LanguageCodeFormat.ISO639_3 => code,
+            LanguageCodeFormat.Bcp47 => _bcp47ToFlores200.GetValueOrDefault(code, DefaultFloreCode),
             _ => code,
         };
 
-        return to switch
+        return toFormat switch
         {
             LanguageCodeFormat.Flores200 => flores,
-            LanguageCodeFormat.Bcp47 => _flores200ToBcp47.GetValueOrDefault(flores, flores),
+            LanguageCodeFormat.Bcp47 => _flores200ToBcp47.GetValueOrDefault(flores, DefaultBcp47Code),
             _ => code,
         };
     }
-
-    // Used by detectors to map model label (ISO 639-1 or ISO 639-3) → FLORES-200.
-    internal static string IsoLabelToFlores200(string label) =>
-        _isoToFlores200.GetValueOrDefault(label, label);
-
-    internal static LanguageCodeFormat ParseFormat(string? format) =>
-        format?.ToLowerInvariant() switch
-        {
-            null or "" or "bcp47" or "bcp-47" => LanguageCodeFormat.Bcp47,
-            "flores200" or "flores-200" => LanguageCodeFormat.Flores200,
-            "native" => LanguageCodeFormat.Native,
-            _ => LanguageCodeFormat.Bcp47,
-        };
 
     // -------------------------------------------------------------------------
 
@@ -391,7 +380,18 @@ public static class LanguageCodeConverter
             ["lvs"] = "lvs_Latn",
             ["npi"] = "npi_Deva",
             ["ell"] = "ell_Grek",
-            ["el"]  = "ell_Grek",
+            ["el"] = "ell_Grek",
             ["kor"] = "kor_Hang",
         };
+
+    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso = new(() =>
+    {
+        return _isoToFlores200
+            .GroupBy(kv => kv.Value) // Групуємо за Flores кодом (eng_Latn)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First().Key, // Беремо перший знайдений ISO код (напр. "en")
+                StringComparer.OrdinalIgnoreCase
+            );
+    });
 }

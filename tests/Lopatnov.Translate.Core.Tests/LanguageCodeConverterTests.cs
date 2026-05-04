@@ -22,7 +22,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("yue_Hant", "yue")]
     public void Convert_Flores200ToBcp47_ReturnsCorrectCode(string flores, string expectedBcp47)
     {
-        Assert.Equal(expectedBcp47, LanguageCodeConverter.Convert(flores, "flores200", "bcp47"));
+        Assert.Equal(expectedBcp47, LanguageCodeConverter.Convert(flores, LanguageCodeFormat.Flores200, LanguageCodeFormat.Bcp47));
     }
 
     // ── BCP-47 → Flores200 ────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("ar",      "arb_Arab")]
     public void Convert_Bcp47ToFlores200_ReturnsCorrectCode(string bcp47, string expectedFlores)
     {
-        Assert.Equal(expectedFlores, LanguageCodeConverter.Convert(bcp47, "bcp47", "flores200"));
+        Assert.Equal(expectedFlores, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200));
     }
 
     // ── Same format → identity ────────────────────────────────────────────────
@@ -51,7 +51,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("anything", "native")]
     public void Convert_SameFormat_ReturnsUnchanged(string code, string format)
     {
-        Assert.Equal(code, LanguageCodeConverter.Convert(code, format, format));
+        Assert.Equal(code, LanguageCodeConverter.Convert(code, format.ToLanguageCodeFormat(), format.ToLanguageCodeFormat()));
     }
 
     // ── "native" target → passthrough ─────────────────────────────────────────
@@ -62,7 +62,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("whatever", "native")]
     public void Convert_ToNative_AlwaysReturnsInputUnchanged(string code, string fromFormat)
     {
-        Assert.Equal(code, LanguageCodeConverter.Convert(code, fromFormat, "native"));
+        Assert.Equal(code, LanguageCodeConverter.Convert(code, fromFormat.ToLanguageCodeFormat(), LanguageCodeFormat.Native));
     }
 
     // ── Unknown codes passthrough ─────────────────────────────────────────────
@@ -70,8 +70,8 @@ public sealed class LanguageCodeConverterTests
     [Fact]
     public void Convert_UnknownCode_PassesThroughUnchanged()
     {
-        Assert.Equal("xyz_Unknown", LanguageCodeConverter.Convert("xyz_Unknown", "flores200", "bcp47"));
-        Assert.Equal("xx",          LanguageCodeConverter.Convert("xx", "bcp47", "flores200"));
+        Assert.Equal("xyz_Unknown", LanguageCodeConverter.Convert("xyz_Unknown", LanguageCodeFormat.Flores200, LanguageCodeFormat.Bcp47));
+        Assert.Equal("xx",          LanguageCodeConverter.Convert("xx", LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200));
     }
 
     // ── Empty / null input ────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData(null!)]
     public void Convert_EmptyOrNull_ReturnsInputUnchanged(string? code)
     {
-        Assert.Equal(code, LanguageCodeConverter.Convert(code!, "flores200", "bcp47"));
+        Assert.Equal(code, LanguageCodeConverter.Convert(code!, LanguageCodeFormat.Flores200, LanguageCodeFormat.Bcp47));
     }
 
     // ── Format string parsing: aliases and case insensitivity ─────────────────
@@ -96,7 +96,7 @@ public sealed class LanguageCodeConverterTests
     public void Convert_Bcp47FormatVariants_AllResolveToSameResult(string? format)
     {
         const string flores = "ukr_Cyrl";
-        Assert.Equal("uk", LanguageCodeConverter.Convert(flores, "flores200", format!));
+        Assert.Equal("uk", LanguageCodeConverter.Convert(flores, LanguageCodeFormat.Flores200, format!.ToLanguageCodeFormat()));
     }
 
     [Theory]
@@ -106,7 +106,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("FLORES-200")]
     public void Convert_Flores200FormatVariants_AllResolveToSameResult(string format)
     {
-        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", format, "bcp47"));
+        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", LanguageCodeFormat.Flores200, format.ToLanguageCodeFormat()));
     }
 
     // ── LanguageDetectionResult computed properties ───────────────────────────
@@ -114,18 +114,18 @@ public sealed class LanguageCodeConverterTests
     [Fact]
     public void DetectionResult_Bcp47_ConvertsFromNativeFlores()
     {
-        var result = new LanguageDetectionResult("ukr_Cyrl", "flores200");
+        var result = new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200);
         Assert.Equal("uk", result.Bcp47);
         Assert.Equal("ukr_Cyrl", result.Flores200);
-        Assert.Equal("ukr_Cyrl", result.ToFormat("native"));
-        Assert.Equal("ukr_Cyrl", result.ToFormat("flores200"));
-        Assert.Equal("uk", result.ToFormat("bcp47"));
+        Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Native));
+        Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Flores200));
+        Assert.Equal("uk", result.ToFormat(LanguageCodeFormat.Bcp47));
     }
 
     [Fact]
     public void DetectionResult_AlreadyBcp47_RoundTrips()
     {
-        var result = new LanguageDetectionResult("uk", "bcp47");
+        var result = new LanguageDetectionResult("uk", LanguageCodeFormat.Bcp47);
         Assert.Equal("uk", result.Bcp47);
         Assert.Equal("ukr_Cyrl", result.Flores200);
     }

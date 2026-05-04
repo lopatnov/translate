@@ -80,7 +80,7 @@ public sealed class HeuristicLanguageDetectorTests
     [Fact]
     public void Detect_NativeFormat_IsFlores200()
     {
-        Assert.Equal("flores200", _detector.Detect("Hello").NativeFormat);
+        Assert.Equal(LanguageCodeFormat.Flores200, _detector.Detect("Hello").NativeFormat);
     }
 
     [Fact]
