@@ -53,6 +53,9 @@ Multiple entries of the same type are allowed — just use different names. If `
 | Property | Default | Description |
 | --- | --- | --- |
 | `Path` | — | Path to the model file (`.bin` or `.ftz`) |
+| `LabelFormat` | `"flores200"` | Format of the model's output labels. Use `"iso639-1"` for LID-176 (outputs `__label__en`), `"flores200"` for GlotLID (outputs `__label__eng_Latn`). Also supports `"iso639-2"`, `"iso639-3"`. |
+| `LabelPrefix` | `"__label__"` | Prefix to strip from each label before format conversion. |
+| `LabelSuffix` | `""` | Optional suffix to strip from each label. |
 
 **Properties for LibreTranslate:**
 
@@ -128,7 +131,8 @@ HuggingFace repo: [lopatnov/fasttext-language-id](https://huggingface.co/lopatno
 "Models": {
   "langdetect": {
     "Type": "FastText",
-    "Path": "./models/langdetect/lid176/lid.176.ftz"
+    "Path": "./models/langdetect/lid176/lid.176.ftz",
+    "LabelFormat": "iso639-1"   // LID-176 outputs ISO 639-1 codes (en, de, fr, …)
   }
 },
 "Translation": {
@@ -162,7 +166,8 @@ HuggingFace repo: [lopatnov/glotlid](https://huggingface.co/lopatnov/glotlid)
 "Models": {
   "langdetect": {
     "Type": "FastText",
-    "Path": "./models/langdetect/glotlid/model_v3.bin"
+    "Path": "./models/langdetect/glotlid/model_v3.bin",
+    "LabelFormat": "flores200"  // GlotLID outputs FLORES-200 codes (eng_Latn, ukr_Cyrl, …) — this is the default
   }
 },
 "Translation": {

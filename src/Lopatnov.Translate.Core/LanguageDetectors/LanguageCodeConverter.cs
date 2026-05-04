@@ -14,26 +14,50 @@ public static class LanguageCodeConverter
     /// Supported format strings: "bcp47" (default when empty), "flores200", "native".
     /// Unknown codes are returned unchanged.
     /// </summary>
+    /// <inheritdoc cref="Convert(string,LanguageCodeFormat,LanguageCodeFormat)"/>
+    /// Empty/null format string defaults to BCP-47 (suitable for user-facing APIs).
+    public static string Convert(string code, string fromFormat, string toFormat) =>
+        Convert(code, ParseFormat(fromFormat), ParseFormat(toFormat));
+
+    // Lenient parsing for string-based API: handles hyphen variants, empty → BCP-47, unknown → Native.
+    // Distinct from ToLanguageCodeFormat() which throws on unknown values.
+    private static LanguageCodeFormat ParseFormat(string? format) =>
+        format?.ToLowerInvariant() switch
+        {
+            null or "" or "bcp47" or "bcp-47" => LanguageCodeFormat.Bcp47,
+            "flores200" or "flores-200"        => LanguageCodeFormat.Flores200,
+            "native"                           => LanguageCodeFormat.Native,
+            "n/a" or "none"                    => LanguageCodeFormat.None,
+            "iso639-1" or "iso639_1"           => LanguageCodeFormat.ISO639_1,
+            "iso639-2" or "iso639_2"           => LanguageCodeFormat.ISO639_2,
+            "iso639-3" or "iso639_3"           => LanguageCodeFormat.ISO639_3,
+            _                                  => LanguageCodeFormat.Native,
+        };
+
     public static string Convert(string code, LanguageCodeFormat fromFormat, LanguageCodeFormat toFormat)
     {
         if (string.IsNullOrEmpty(code) || fromFormat == toFormat || toFormat == LanguageCodeFormat.Native || toFormat == LanguageCodeFormat.None) return code;
 
+        // None format → normalise to the default English FLORES-200 before converting
         string flores = fromFormat switch
         {
-            LanguageCodeFormat.None => DefaultFloreCode,
+            LanguageCodeFormat.None      => DefaultFloreCode,
             LanguageCodeFormat.Flores200 => code,
-            LanguageCodeFormat.ISO639_1 => code,
-            LanguageCodeFormat.ISO639_2 => code,
-            LanguageCodeFormat.ISO639_3 => code,
-            LanguageCodeFormat.Bcp47 => _bcp47ToFlores200.GetValueOrDefault(code, DefaultFloreCode),
-            _ => code,
+            LanguageCodeFormat.ISO639_1 or
+            LanguageCodeFormat.ISO639_2 or
+            LanguageCodeFormat.ISO639_3  => _isoToFlores200.GetValueOrDefault(code, code),
+            LanguageCodeFormat.Bcp47     => _bcp47ToFlores200.GetValueOrDefault(code, code), // passthrough for unknown
+            _                            => code,
         };
 
         return toFormat switch
         {
             LanguageCodeFormat.Flores200 => flores,
-            LanguageCodeFormat.Bcp47 => _flores200ToBcp47.GetValueOrDefault(flores, DefaultBcp47Code),
-            _ => code,
+            LanguageCodeFormat.Bcp47     => _flores200ToBcp47.GetValueOrDefault(flores, flores), // passthrough for unknown
+            LanguageCodeFormat.ISO639_1  => _flores200ToIso639_1.Value.GetValueOrDefault(flores, flores),
+            LanguageCodeFormat.ISO639_2 or
+            LanguageCodeFormat.ISO639_3  => _flores200ToIso639_3.Value.GetValueOrDefault(flores, flores),
+            _                            => code,
         };
     }
 
@@ -384,14 +408,17 @@ public static class LanguageCodeConverter
             ["kor"] = "kor_Hang",
         };
 
-    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso = new(() =>
-    {
-        return _isoToFlores200
-            .GroupBy(kv => kv.Value) // Групуємо за Flores кодом (eng_Latn)
-            .ToDictionary(
-                g => g.Key,
-                g => g.First().Key, // Беремо перший знайдений ISO код (напр. "en")
-                StringComparer.OrdinalIgnoreCase
-            );
-    });
+    // FLORES-200 → ISO 639-1 (2-letter codes, e.g. "eng_Latn" → "en")
+    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso639_1 = new(() =>
+        _isoToFlores200
+            .Where(kv => kv.Key.Length == 2)
+            .GroupBy(kv => kv.Value)
+            .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase));
+
+    // FLORES-200 → ISO 639-3 (3-letter codes, e.g. "eng_Latn" → "eng")
+    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso639_3 = new(() =>
+        _isoToFlores200
+            .Where(kv => kv.Key.Length == 3)
+            .GroupBy(kv => kv.Value)
+            .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase));
 }

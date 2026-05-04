@@ -74,7 +74,11 @@ public sealed class FastTextLid176Fixture
     public FastTextLid176Fixture()
     {
         if (File.Exists(ModelPath))
-            Detector = FastTextLanguageDetector.Load(ModelPath);
+            Detector = FastTextLanguageDetector.Load(ModelPath, new FastTextLanguageDetectorSettings
+            {
+                LabelFormat = LanguageCodeFormat.ISO639_1,
+                LabelPrefix = "__label__",
+            });
     }
 }
 
@@ -119,7 +123,7 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     {
         var result = fixture.Detector!.Detect(text);
         Assert.Equal(expectedFlores, result.NativeCode);
-        Assert.Equal("flores200", result.NativeFormat);
+        Assert.Equal(LanguageCodeFormat.Flores200, result.NativeFormat);
         Assert.Equal(expectedBcp47, result.Bcp47);
     }
 

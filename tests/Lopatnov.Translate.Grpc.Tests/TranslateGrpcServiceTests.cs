@@ -124,10 +124,11 @@ public sealed class TranslateGrpcServiceTests
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
-        // Default language_format is "" = bcp47, so detected_language in response is BCP-47.
+        // LanguageFormat = "bcp47" → detected_language in response is BCP-47.
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "eng_Latn", Model = "nllb",
+            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "eng_Latn",
+            Model = "nllb", LanguageFormat = "bcp47",
         }, ctx.Object);
 
         mockDetector.Verify(d => d.Detect("hello"), Times.Once);

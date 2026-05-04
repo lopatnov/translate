@@ -5,12 +5,30 @@ using Lopatnov.Translate.Core.Abstractions;
 namespace Lopatnov.Translate.Core.LanguageDetectors;
 
 /// <summary>
+/// Settings for <see cref="FastTextLanguageDetector"/>.
+/// Controls how model labels are stripped and converted to FLORES-200 at load time.
+/// </summary>
+public sealed class FastTextLanguageDetectorSettings
+{
+    /// <summary>Format of the labels in the model file. Default: Flores200 (GlotLID).</summary>
+    public LanguageCodeFormat LabelFormat { get; set; } = LanguageCodeFormat.Flores200;
+
+    /// <summary>Prefix to strip from each label. Default: "__label__".</summary>
+    public string LabelPrefix { get; set; } = "__label__";
+
+    /// <summary>Optional suffix to strip from each label. Default: empty.</summary>
+    public string LabelSuffix { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Language detector backed by a fastText supervised model (.ftz compressed or .bin full-precision).
 /// Loads the binary file directly — no Python or native fastText library needed.
 ///
 /// Supported models:
 ///   lid.176.bin/.ftz — fastText LID-176, CC BY-SA 3.0, 176 languages (hierarchical softmax)
+///                      Use LabelFormat = ISO639_1 ("iso639-1") in settings.
 ///   model.bin        — GlotLID v3 (cis-lmu/glotlid-model), Apache 2.0, 1633 languages (OVA)
+///                      Use LabelFormat = Flores200 ("flores200") in settings (default).
 ///
 /// Binary format reference: fastText v12 (magic = 793712314).
 /// Loss type 1 (hierarchical softmax): Huffman tree is reconstructed for correct prediction.
@@ -97,7 +115,10 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    public static FastTextLanguageDetector Load(string path)
+    public static FastTextLanguageDetector Load(string path) =>
+        Load(path, new FastTextLanguageDetectorSettings());
+
+    public static FastTextLanguageDetector Load(string path, FastTextLanguageDetectorSettings settings)
     {
         using var br = new BinaryReader(File.OpenRead(path), Encoding.UTF8, leaveOpen: false);
 
@@ -138,12 +159,11 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
         var labelFlores = new List<string>(nlabels);
         var labelCounts = new List<long>(nlabels);
-        const string labelPrefix = "__label__";
         for (int i = 0; i < size; i++)
         {
             if (types[i] == 1)
             {
-                labelFlores.Add(MapToFlores(words[i], labelPrefix));
+                labelFlores.Add(MapLabel(words[i], settings));
                 labelCounts.Add(counts[i]);
             }
         }
@@ -263,7 +283,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     public LanguageDetectionResult Detect(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return new LanguageDetectionResult(Language.EnglishLatin, "flores200");
+            return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200);
 
         var h = new float[_dim];
         int count = 0;
@@ -281,14 +301,14 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         }
 
         if (count == 0)
-            return new LanguageDetectionResult(Language.EnglishLatin, "flores200");
+            return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200);
 
         for (int i = 0; i < _dim; i++)
             h[i] /= count;
 
         return new LanguageDetectionResult(
             _hsTree != null ? PredictHs(h) : PredictArgmax(h),
-            "flores200");
+            LanguageCodeFormat.Flores200);
     }
 
     // -------------------------------------------------------------------------
@@ -514,9 +534,14 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    private static string MapToFlores(string label, string prefix)
+    private static string MapLabel(string label, FastTextLanguageDetectorSettings s)
     {
-        var iso = label.StartsWith(prefix, StringComparison.Ordinal) ? label[prefix.Length..] : label;
-        return LanguageCodeConverter.IsoLabelToFlores200(iso);
+        if (label.StartsWith(s.LabelPrefix, StringComparison.Ordinal))
+            label = label[s.LabelPrefix.Length..];
+        if (!string.IsNullOrEmpty(s.LabelSuffix) && label.EndsWith(s.LabelSuffix, StringComparison.Ordinal))
+            label = label[..^s.LabelSuffix.Length];
+        if (s.LabelFormat == LanguageCodeFormat.Flores200)
+            return label;
+        return LanguageCodeConverter.Convert(label, s.LabelFormat, LanguageCodeFormat.Flores200);
     }
 }

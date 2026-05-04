@@ -80,7 +80,7 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
     }
 
     var modelPath = ResolvePath(cfg.Path);
-    var log = sp.GetRequiredService<ILogger<NativeFastTextLanguageDetector>>();
+    var log = sp.GetRequiredService<ILogger<FastTextLanguageDetector>>();
 
     if (string.IsNullOrWhiteSpace(modelPath) || !File.Exists(modelPath))
     {
@@ -94,12 +94,11 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         autoDetectName, cfgType, modelPath);
     try
     {
-        return new NativeFastTextLanguageDetector(new NativeFastTextLanguageDetectorSettings
+        return FastTextLanguageDetector.Load(modelPath, new FastTextLanguageDetectorSettings
         {
-            ModelPath = modelPath,
-            LabelFormat = cfg.LabelFormat?.ToLanguageCodeFormat() ?? LanguageCodeFormat.Native,
+            LabelFormat = cfg.LabelFormat?.ToLanguageCodeFormat() ?? LanguageCodeFormat.Flores200,
             LabelPrefix = cfg.LabelPrefix ?? "__label__",
-            LabelSuffix = cfg.LabelSuffix,
+            LabelSuffix = cfg.LabelSuffix ?? string.Empty,
         });
     }
     catch (Exception ex)

@@ -95,8 +95,8 @@ public sealed class LanguageCodeConverterTests
     [InlineData(null!)]
     public void Convert_Bcp47FormatVariants_AllResolveToSameResult(string? format)
     {
-        const string flores = "ukr_Cyrl";
-        Assert.Equal("uk", LanguageCodeConverter.Convert(flores, LanguageCodeFormat.Flores200, format!.ToLanguageCodeFormat()));
+        // Tests that various "bcp47" string spellings all resolve to the same result via the string API.
+        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", "flores200", format!));
     }
 
     [Theory]
@@ -106,7 +106,8 @@ public sealed class LanguageCodeConverterTests
     [InlineData("FLORES-200")]
     public void Convert_Flores200FormatVariants_AllResolveToSameResult(string format)
     {
-        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", LanguageCodeFormat.Flores200, format.ToLanguageCodeFormat()));
+        // Tests that various "flores200" string spellings all resolve to the same result via the string API.
+        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", format, "bcp47"));
     }
 
     // ── LanguageDetectionResult computed properties ───────────────────────────
