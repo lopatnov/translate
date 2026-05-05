@@ -15,6 +15,8 @@
   - [M2M-100 418M](#m2m-100-418m)
   - [M2M-100 1.2B](#m2m-100-12b)
   - [LibreTranslate](#libretranslate)
+- Speech-to-Text
+  - [Whisper](#whisper)
 
 ---
 
@@ -27,7 +29,7 @@ Models are configured by name in `appsettings.json` under `Models`. Each entry h
 ```jsonc
 "Models": {
   "<name>": {
-    "Type": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate
+    "Type": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate | Whisper
     // ... type-specific properties (see each model below)
   }
 }
@@ -74,6 +76,7 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `M2M100` | Any ONNX encoder-decoder model using the M2M-100 tokenizer (`vocab.json` + `added_tokens.json`, ISO 639-1 `__lang__` tokens) |
 | `FastText` | Any fastText supervised classification model in `.bin` or `.ftz` format |
 | `LibreTranslate` | Any LibreTranslate-compatible HTTP API endpoint |
+| `Whisper` | Any Whisper ggml model file (`ggml-*.bin`) compatible with whisper.cpp / Whisper.net |
 
 Models **not** compatible without a new type: MarianMT (OPUS-MT), mBART-50, SeamlessM4T — they use different tokenizer formats.
 
@@ -85,10 +88,11 @@ Controls routing and lifecycle of loaded models.
 
 ```jsonc
 "Translation": {
-  "DefaultModel": "nllb",      // model used when the request's model field is empty
-  "AutoDetect": "langdetect",  // name of a FastText model for language auto-detection
-  "AllowedModels": [],         // allowlist of model names; empty = all configured models are allowed
-  "ModelTtlMinutes": 30        // minutes of inactivity before a model is unloaded from memory
+  "DefaultModel": "m2m100_418M",  // model used when the request's model field is empty
+  "AutoDetect": "lid-176-ftz",    // name of a FastText model for language auto-detection
+  "AudioToText": "whisper-small", // name of a Whisper model for speech-to-text; "" = STT disabled
+  "AllowedModels": ["m2m100_418M"], // allowlist; empty = all configured translation models allowed
+  "ModelTtlMinutes": 30           // minutes of inactivity before a model is unloaded from memory
 }
 ```
 
@@ -96,8 +100,9 @@ Controls routing and lifecycle of loaded models.
 | --- | --- | --- |
 | `DefaultModel` | `""` | Name of the model to use when `model` is not specified in the request. If empty and the request omits `model`, the request fails. |
 | `AutoDetect` | `""` | Name of a `FastText` model used for language auto-detection. Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty or the model file is missing, falls back to heuristic detection. |
-| `AllowedModels` | `[]` | Restricts which models clients may request by name. Empty list means all configured translation models are accessible. Useful when you configure multiple models but want to expose only some via the API. |
-| `ModelTtlMinutes` | `30` | A loaded model is kept in memory for this many minutes after its last use, then unloaded to free resources. Set to a large value to keep models always loaded. |
+| `AudioToText` | `""` | Name of a `Whisper` model entry used for speech-to-text transcription (`TranscribeAudio` RPC). If empty, the RPC returns `FAILED_PRECONDITION`. |
+| `AllowedModels` | `[]` | Restricts which translation models clients may request by name. Empty list means all configured translation models are accessible. `Whisper` and `FastText` entries are not affected by this list. |
+| `ModelTtlMinutes` | `30` | All model types are kept in memory for this many minutes after last use, then unloaded to free resources. |
 
 ---
 
@@ -362,3 +367,62 @@ An open-source machine translation server. Runs as a separate Docker container a
 ```
 
 The `BaseUrl` `http://libretranslate:5000` works when running via Docker Compose. For an external instance, replace with its URL.
+
+---
+
+## Speech-to-Text
+
+---
+
+### Whisper
+
+**OpenAI Whisper · ggml format · 99 languages**
+
+Runs locally via [Whisper.net](https://github.com/sandrohanea/whisper.net) (a managed wrapper over [whisper.cpp](https://github.com/ggerganov/whisper.cpp)). Accepts any WAV file — resampled automatically to 16 kHz mono before inference. The model is loaded lazily on first request and unloaded after `ModelTtlMinutes` of inactivity.
+
+**License: [MIT](https://opensource.org/licenses/MIT)**
+✅ Unrestricted commercial use.
+
+**Download**
+
+```powershell
+# small (~500 MB) — recommended default
+.\scripts\download-whisper.ps1 -ModelSize small
+
+# medium (~1.5 GB) — better quality
+.\scripts\download-whisper.ps1 -ModelSize medium
+```
+
+Or manually:
+
+```bash
+huggingface-cli download ggerganov/whisper.cpp ggml-small.bin \
+  --local-dir ./models/audio-to-text/whisper.cpp
+```
+
+**appsettings.json**
+
+```jsonc
+"Models": {
+  "whisper-small": {
+    "Type": "Whisper",
+    "Path": "../../models/audio-to-text/whisper.cpp/ggml-small.bin"
+  },
+  "whisper-medium": {
+    "Type": "Whisper",
+    "Path": "../../models/audio-to-text/whisper.cpp/ggml-medium.bin"
+  }
+},
+"Translation": {
+  "AudioToText": "whisper-small"   // switch to "whisper-medium" for better quality
+}
+```
+
+To switch models: change `AudioToText` — no code changes needed.
+
+**Properties for Whisper:**
+
+| Property | Required | Description |
+| --- | --- | --- |
+| `Path` | ✅ | Path to the `.bin` ggml model file |
+

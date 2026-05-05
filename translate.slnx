@@ -5,11 +5,13 @@
     <Project Path="src/Lopatnov.Translate.LibreTranslate/Lopatnov.Translate.LibreTranslate.csproj" />
     <Project Path="src/Lopatnov.Translate.M2M100/Lopatnov.Translate.M2M100.csproj" />
     <Project Path="src/Lopatnov.Translate.Nllb/Lopatnov.Translate.Nllb.csproj" />
+    <Project Path="src/Lopatnov.Translate.Whisper/Lopatnov.Translate.Whisper.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Lopatnov.Translate.Core.Tests/Lopatnov.Translate.Core.Tests.csproj" />
     <Project Path="tests/Lopatnov.Translate.Grpc.Tests/Lopatnov.Translate.Grpc.Tests.csproj" />
     <Project Path="tests/Lopatnov.Translate.M2M100.Tests/Lopatnov.Translate.M2M100.Tests.csproj" />
     <Project Path="tests/Lopatnov.Translate.Nllb.Tests/Lopatnov.Translate.Nllb.Tests.csproj" />
+    <Project Path="tests/Lopatnov.Translate.Whisper.Tests/Lopatnov.Translate.Whisper.Tests.csproj" />
   </Folder>
 </Solution>

@@ -17,10 +17,10 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
         while (dir != null)
         {
             if (File.Exists(Path.Combine(dir.FullName, "translate.slnx")))
-                return Path.Combine(dir.FullName, "models", "m2m100");
+                return Path.Combine(dir.FullName, "models", "translate", "m2m100_418M");
             dir = dir.Parent;
         }
-        return Path.Combine("models", "m2m100");
+        return Path.Combine("models", "translate", "m2m100_418M");
     }
 
     [SkippableTheory]

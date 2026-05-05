@@ -12,6 +12,8 @@ public sealed class TranslateGrpcServiceTests
     private static readonly Lazy<ILanguageDetector> NoDetector = new(() => new Mock<ILanguageDetector>().Object);
     private static Lazy<ILanguageDetector> WithDetector(ILanguageDetector d) => new(() => d);
 
+    private static readonly ISpeechRecognizer NoRecognizer = new Mock<ISpeechRecognizer>().Object;
+
     private static ModelSessionManager SingleProviderManager(string key, ITextTranslator translator)
         => new(
             new Dictionary<string, Func<ITextTranslator>> { [key] = () => translator },
@@ -31,7 +33,7 @@ public sealed class TranslateGrpcServiceTests
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("translated");
 
-        var svc = new TranslateGrpcService(SingleProviderManager(provider, mockTranslator.Object), NoDetector, TranslationOpts(provider));
+        var svc = new TranslateGrpcService(SingleProviderManager(provider, mockTranslator.Object), NoDetector, NoRecognizer, TranslationOpts(provider));
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -55,7 +57,7 @@ public sealed class TranslateGrpcServiceTests
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("translated");
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector, TranslationOpts("nllb"));
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector, NoRecognizer, TranslationOpts("nllb"));
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -72,7 +74,7 @@ public sealed class TranslateGrpcServiceTests
     [Fact]
     public async Task TranslateText_ThrowsInvalidArgument_ForUnknownProvider()
     {
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoDetector, TranslationOpts());
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoDetector, NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
@@ -94,7 +96,7 @@ public sealed class TranslateGrpcServiceTests
             allowedModels: ["nllb"],
             ttl: TimeSpan.FromMinutes(30));
 
-        var svc = new TranslateGrpcService(manager, NoDetector, TranslationOpts());
+        var svc = new TranslateGrpcService(manager, NoDetector, NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
@@ -121,7 +123,7 @@ public sealed class TranslateGrpcServiceTests
         mockDetector.Setup(d => d.Detect("hello"))
             .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         // LanguageFormat = "bcp47" → detected_language in response is BCP-47.
@@ -150,7 +152,7 @@ public sealed class TranslateGrpcServiceTests
         mockDetector.Setup(d => d.Detect("hello"))
             .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -170,7 +172,7 @@ public sealed class TranslateGrpcServiceTests
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Привіт");
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector, TranslationOpts());
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), NoDetector, NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         await svc.TranslateText(new TranslateTextRequest
@@ -194,7 +196,7 @@ public sealed class TranslateGrpcServiceTests
 
         var mockDetector = new Mock<ILanguageDetector>();
 
-        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), TranslationOpts());
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), NoRecognizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
@@ -216,6 +218,7 @@ public sealed class TranslateGrpcServiceTests
         var svc = new TranslateGrpcService(
             SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
             WithDetector(mockDetector.Object),
+            NoRecognizer,
             TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
@@ -234,6 +237,7 @@ public sealed class TranslateGrpcServiceTests
         var svc = new TranslateGrpcService(
             SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
             WithDetector(mockDetector.Object),
+            NoRecognizer,
             TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 

@@ -51,7 +51,7 @@ public sealed class FastTextDetectorFixture
     internal static readonly string ModelPath =
         Environment.GetEnvironmentVariable("TEST_LANGDETECT_MODEL_PATH")
         ?? Path.GetFullPath(
-               Path.Combine(AppContext.BaseDirectory, "../../../../../models/glotlid/model_v3.bin"));
+               Path.Combine(AppContext.BaseDirectory, "../../../../../models/detect-lang/glotlid/model_v3.bin"));
 
     public FastTextLanguageDetector? Detector { get; }
 
@@ -67,7 +67,7 @@ public sealed class FastTextLid176Fixture
     internal static readonly string ModelPath =
         Environment.GetEnvironmentVariable("TEST_LID176_MODEL_PATH")
         ?? Path.GetFullPath(
-               Path.Combine(AppContext.BaseDirectory, "../../../../../models/fasttext-language-id/lid.176.ftz"));
+               Path.Combine(AppContext.BaseDirectory, "../../../../../models/detect-lang/fasttext-language-id/lid.176.ftz"));
 
     public FastTextLanguageDetector? Detector { get; }
 

@@ -6,6 +6,7 @@ using Lopatnov.Translate.Grpc.Services;
 using Lopatnov.Translate.LibreTranslate;
 using Lopatnov.Translate.M2M100;
 using Lopatnov.Translate.Nllb;
+using Lopatnov.Translate.Whisper;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,12 +31,13 @@ foreach (var (name, cfg) in rawModels)
     if (!ModelType.IsKnown(cfg.Type))
         throw new InvalidOperationException(
             $"Configuration error: Models:{name}:Type value '{cfg.Type}' is unknown. " +
-            "Known: NLLB, M2M100, FastText, LibreTranslate.");
+            "Known: NLLB, M2M100, FastText, LibreTranslate, Whisper.");
 }
 
 // --- Validate Translation references ---
 var translationSection = builder.Configuration.GetSection("Translation");
-var defaultModel = translationSection["DefaultModel"] ?? string.Empty;
+var defaultModel  = translationSection["DefaultModel"]  ?? string.Empty;
+var audioToText   = translationSection["AudioToText"]   ?? string.Empty;
 var allowedModels = translationSection.GetSection("AllowedModels").Get<string[]>() ?? [];
 
 if (!string.IsNullOrWhiteSpace(defaultModel) && !rawModels.ContainsKey(defaultModel))
@@ -46,6 +48,17 @@ var badAllowed = Array.Find(allowedModels, m => !rawModels.ContainsKey(m));
 if (badAllowed != null)
     throw new InvalidOperationException(
         $"Configuration error: Translation:AllowedModels contains '{badAllowed}' which is not defined in Models.");
+
+if (!string.IsNullOrWhiteSpace(audioToText))
+{
+    if (!rawModels.TryGetValue(audioToText, out var attCfg))
+        throw new InvalidOperationException(
+            $"Configuration error: Translation:AudioToText '{audioToText}' is not defined in Models.");
+    if (!attCfg.Type.Equals(ModelType.Whisper, StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+            $"Configuration error: Translation:AudioToText '{audioToText}' must have Type=Whisper " +
+            $"(found '{attCfg.Type}').");
+}
 
 // --- Register named HttpClients for LibreTranslate entries ---
 foreach (var (name, cfg) in rawModels.Where(kv =>
@@ -62,7 +75,7 @@ builder.Services.AddOptions<TranslationOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// --- Language detector: from Translation:AutoDetect, null fallback otherwise ---
+// --- Language detector: from Translation:AutoDetect, heuristic fallback ---
 var autoDetectName = builder.Configuration["Translation:AutoDetect"] ?? string.Empty;
 builder.Services.AddSingleton<ILanguageDetector>(sp =>
 {
@@ -89,9 +102,8 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         return new HeuristicLanguageDetector();
     }
 
-    var cfgType = cfg.Type;
     log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
-        autoDetectName, cfgType, modelPath);
+        autoDetectName, cfg.Type, modelPath);
     try
     {
         return FastTextLanguageDetector.Load(modelPath, new FastTextLanguageDetectorSettings
@@ -111,7 +123,34 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
 builder.Services.AddSingleton<Lazy<ILanguageDetector>>(sp =>
     new Lazy<ILanguageDetector>(sp.GetRequiredService<ILanguageDetector>));
 
-// --- ModelSessionManager: lazy init + TTL eviction ---
+// --- Speech recognizer (Whisper): lazy load + TTL, or NullSpeechRecognizer if not configured ---
+builder.Services.AddSingleton<ISpeechRecognizer>(sp =>
+{
+    if (string.IsNullOrWhiteSpace(audioToText) ||
+        !rawModels.TryGetValue(audioToText, out var wCfg))
+    {
+        sp.GetRequiredService<ILogger<Program>>()
+          .LogInformation("Translation:AudioToText is empty — STT disabled (NullSpeechRecognizer)");
+        return new NullSpeechRecognizer();
+    }
+
+    var translOpts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
+    var log        = sp.GetRequiredService<ILogger<WhisperRecognizer>>();
+    var modelPath  = ResolvePath(wCfg.Path);
+
+    log.LogInformation(
+        "Registering Whisper STT model '{Key}' — will load lazily from {Path}", audioToText, modelPath);
+
+    return new WhisperRecognizer(
+        Options.Create(new WhisperOptions
+        {
+            ModelPath  = modelPath,
+            TtlMinutes = translOpts.ModelTtlMinutes,
+        }),
+        log);
+});
+
+// --- ModelSessionManager: lazy init + TTL eviction (text translation only) ---
 builder.Services.AddSingleton<ModelSessionManager>(BuildSessionManager);
 
 ModelSessionManager BuildSessionManager(IServiceProvider sp)
@@ -126,6 +165,11 @@ ModelSessionManager BuildSessionManager(IServiceProvider sp)
 void RegisterFactory(Dictionary<string, Func<ITextTranslator>> factories, string name, ModelConfig cfg, IServiceProvider sp)
 {
     var c = cfg; var n = name;
+
+    // Whisper models are speech-to-text, not text translators — skip.
+    if (c.Type.Equals(ModelType.Whisper, StringComparison.OrdinalIgnoreCase))
+        return;
+
     if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
     {
         factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
@@ -151,6 +195,7 @@ void RegisterFactory(Dictionary<string, Func<ITextTranslator>> factories, string
             httpFac.CreateClient(n),
             Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
     }
+    // FastText models are language detectors — registered separately above, skip here.
 }
 
 var app = builder.Build();

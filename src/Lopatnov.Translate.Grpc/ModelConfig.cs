@@ -7,8 +7,10 @@ public static class ModelType
     public const string FastText = "FastText";
     public const string LibreTranslate = "LibreTranslate";
 
+    public const string Whisper = "Whisper";
+
     private static readonly HashSet<string> KnownTypes =
-        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, FastText, LibreTranslate };
+        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, FastText, LibreTranslate, Whisper };
 
     public static bool IsKnown(string type) => KnownTypes.Contains(type);
 }

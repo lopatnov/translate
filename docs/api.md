@@ -6,18 +6,31 @@ Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](../src/Lopa
 
 ---
 
+## Contents
+
+- [Language code formats](#language-code-formats)
+- [RPCs](#rpcs)
+- [TranslateText](#translatetext)
+- [TranslateLocalization](#translatelocalization)
+- [DetectLanguage](#detectlanguage)
+- [TranscribeAudio](#transcribeaudio)
+- [GetCapabilities](#getcapabilities)
+- [Error codes](#error-codes)
+
+---
+
 ## Language code formats
 
 All RPCs that accept or return language codes support a `language_format` field on the request.
 
-| Value         | Description                                                             | Example                    |
-| ------------- | ----------------------------------------------------------------------- | -------------------------- |
-| `"bcp47"`     | BCP-47 tags. Default for `DetectLanguage` when field is empty or omitted. | `"uk"`, `"zh-Hans"`     |
-| `"flores200"` | FLORES-200 codes used internally by NLLB and M2M-100                   | `"ukr_Cyrl"`, `"zho_Hans"` |
-| `"iso639-1"`  | ISO 639-1 two-letter codes                                              | `"uk"`, `"de"`             |
-| `"iso639-2"`  | ISO 639-2 three-letter codes (terminological form)                      | `"ukr"`, `"deu"`           |
-| `"iso639-3"`  | ISO 639-3 three-letter codes                                            | `"ukr"`, `"deu"`           |
-| `"native"`    | No conversion — pass the code through unchanged. Default for `TranslateText` and `TranslateLocalization` when the field is empty (ensures backward compatibility with clients that send FLORES-200 directly). | any string |
+| Value | Description | Example |
+|---|---|---|
+| `"bcp47"` | BCP-47 tags. Default when field is empty or omitted. | `"uk"`, `"zh-Hans"` |
+| `"flores200"` | FLORES-200 codes used internally by NLLB and M2M-100 | `"ukr_Cyrl"`, `"zho_Hans"` |
+| `"iso639-1"` | ISO 639-1 two-letter codes | `"uk"`, `"de"` |
+| `"iso639-2"` | ISO 639-2 three-letter codes (terminological form) | `"ukr"`, `"deu"` |
+| `"iso639-3"` | ISO 639-3 three-letter codes | `"ukr"`, `"deu"` |
+| `"native"` | No conversion — pass the code through unchanged. Default for `TranslateText` and `TranslateLocalization` when field is empty. | any string |
 
 Unknown or unrecognised codes are returned unchanged regardless of format.
 
@@ -25,12 +38,13 @@ Unknown or unrecognised codes are returned unchanged regardless of format.
 
 ## RPCs
 
-| RPC                     | Description                               |
-| ----------------------- | ----------------------------------------- |
-| `TranslateText`         | Translate a text string                   |
+| RPC | Description |
+|---|---|
+| `TranslateText` | Translate a text string |
 | `TranslateLocalization` | Translate all strings in a JSON i18n file |
-| `DetectLanguage`        | Detect the language of a text string      |
-| `GetCapabilities`       | List available models and languages       |
+| `DetectLanguage` | Detect the language of a text string |
+| `TranscribeAudio` | Transcribe speech from a WAV file |
+| `GetCapabilities` | List available models and service capabilities |
 
 ---
 
@@ -42,12 +56,12 @@ Translates a single text string between two languages.
 
 ```protobuf
 message TranslateTextRequest {
-  string text = 1;
-  string source_language = 2;  // optional: language code (see language_format); or "auto" / "" to detect = default value
+  string text            = 1;
+  string source_language = 2;  // language code (see language_format); "auto" or "" = auto-detect
   string target_language = 3;  // language code (see language_format)
-  string model = 4;            // optional: name of the model entry from config (e.g. "nllb"); empty = default model
-  string context = 5;          // optional: free-form hint for the translation (reserved for LLM-based models)
-  string language_format = 6;  // optional: "bcp47" (default), "flores200", "native"
+  string model           = 4;  // model key from appsettings.json (e.g. "m2m100_418M"); "" = default
+  string context         = 5;  // optional: free-form hint (reserved for LLM-based models)
+  string language_format = 6;  // "bcp47" (default) | "flores200" | "native"
 }
 ```
 
@@ -55,9 +69,9 @@ message TranslateTextRequest {
 
 ```protobuf
 message TranslateTextResponse {
-  string translated_text = 1;
-  string detected_language = 2;  // set when source_language was "auto" or empty; format matches request language_format
-  string model_used = 3;
+  string translated_text   = 1;
+  string detected_language = 2;  // set when source_language was "auto" or ""; in language_format
+  string model_used        = 3;  // key of the model that performed the translation
 }
 ```
 
@@ -72,7 +86,7 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
-FLORES-200 sample with direct NLLB model compatibility:
+With FLORES-200 codes:
 
 ```bash
 grpcurl -plaintext \
@@ -81,14 +95,14 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
-With automatic language detection (detected language returned in BCP-47 by default):
+With auto language detection:
 
 ```bash
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
   -d '{"text": "Привіт, як справи?", "source_language": "auto", "target_language": "en"}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
-# → {"translatedText": "...", "detectedLanguage": "uk", "modelUsed": "nllb"}
+# → {"translatedText": "Hello, how are you?", "detectedLanguage": "uk", "modelUsed": "m2m100_418M"}
 ```
 
 ---
@@ -105,13 +119,13 @@ Supports arbitrary nesting depth and arrays.
 
 ```protobuf
 message TranslateLocalizationRequest {
-  string json = 1;
-  string source_language = 2;       // language code (see language_format)
-  string target_language = 3;       // language code (see language_format)
-  string model = 4;                 // optional: name of the model entry from config; empty = default model
+  string json                 = 1;
+  string source_language      = 2;  // language code (see language_format)
+  string target_language      = 3;
+  string model                = 4;  // optional; "" = default model
   string existing_translation = 5;  // optional: same-structure JSON with already-translated values; matching keys are reused as-is
-  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based models)
-  string language_format = 7;       // optional: "bcp47" (default), "flores200", "native"
+  string context              = 6;  // optional: same-structure JSON with context hints per key
+  string language_format      = 7;
 }
 ```
 
@@ -119,14 +133,14 @@ message TranslateLocalizationRequest {
 
 ```protobuf
 message TranslateLocalizationResponse {
-  string json = 1;              // translated JSON, same structure as input
-  int32 strings_translated = 2; // number of strings newly translated (excludes reused from existing_translation)
+  string json               = 1;  // translated JSON, same structure as input
+  int32  strings_translated = 2;  // number of strings newly translated (excludes reused from existing_translation)
 }
 ```
 
 ### Examples
 
-Translate a full i18n file (BCP-47):
+Translate a full i18n file:
 
 ```bash
 grpcurl -plaintext \
@@ -148,15 +162,17 @@ grpcurl -plaintext \
 
 ## DetectLanguage
 
-Detects the language of a text string. Requires `Translation:AutoDetect` to be configured in `appsettings.json`.
-Returns BCP-47 by default.
+Detects the language of a text string. Returns BCP-47 by default.
+
+Requires `Translation:AutoDetect` to be set in `appsettings.json`.
+If not configured, falls back to heuristic detection (Unicode block analysis).
 
 ### Request
 
 ```protobuf
 message DetectLanguageRequest {
-  string text = 1;
-  string language_format = 2;  // optional: "bcp47" (default), "flores200", "native"
+  string text            = 1;
+  string language_format = 2;  // "bcp47" (default) | "flores200" | "native"
 }
 ```
 
@@ -164,7 +180,8 @@ message DetectLanguageRequest {
 
 ```protobuf
 message DetectLanguageResponse {
-  string language = 1;  // language code in the requested format; default BCP-47, e.g. "uk", "de", "zh-Hans"
+  string language    = 1;  // language code in the requested format
+  float  probability = 2;  // confidence score (0.0–1.0); populated if the detector supports it
 }
 ```
 
@@ -178,7 +195,7 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/DetectLanguage
 # → {"language": "uk"}
 
-# FLORES-200 sample
+# FLORES-200
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
   -d '{"text": "Привіт, як справи?", "language_format": "flores200"}' \
@@ -188,13 +205,82 @@ grpcurl -plaintext \
 
 ---
 
+## TranscribeAudio
+
+Transcribes speech from a WAV audio file.
+
+Requires `Translation:AudioToText` to be set in `appsettings.json` (see [docs/models.md](models.md#whisper)).
+The model is loaded lazily on first request and unloaded after `ModelTtlMinutes` of inactivity.
+
+### Request
+
+```protobuf
+message TranscribeAudioRequest {
+  bytes  audio_data      = 1;  // WAV file bytes (any sample rate / channels — resampled automatically to 16 kHz mono)
+  string language        = 2;  // BCP-47 language hint (e.g. "en", "ru"); "" or "auto" = Whisper auto-detection
+  string audio_format    = 3;  // reserved; pass "" or "wav"
+  string language_format = 4;  // format for detected_language in response: "bcp47" (default) | "flores200"
+}
+```
+
+### Response
+
+```protobuf
+message TranscribeAudioResponse {
+  repeated TranscriptionSegment segments          = 1;
+  string                        detected_language = 2;  // in language_format
+  string                        full_text         = 3;  // all segments joined with spaces
+}
+
+message TranscriptionSegment {
+  string text       = 1;
+  float  start_time = 2;  // seconds from start of audio
+  float  end_time   = 3;
+}
+```
+
+### Examples
+
+**bash / macOS / Linux:**
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"auto\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+```
+
+**PowerShell (Windows):**
+
+```powershell
+$audioBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("recording.wav"))
+$body = "{`"audio_data`": `"$audioBase64`", `"language`": `"auto`"}"
+grpcurl -plaintext `
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto `
+  -d $body `
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+```
+
+With explicit language and FLORES-200 response:
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"uk\", \"language_format\": \"flores200\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+# → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"ukr_Cyrl", "fullText":"Привіт"}
+```
+
+---
+
 ## GetCapabilities
 
-Returns the list of configured translation models.
+Returns service capabilities and the list of available translation models.
 
 ```protobuf
 message GetCapabilitiesResponse {
-  repeated string available_models = 3;
+  repeated string available_models = 3;  // translation model keys from AllowedModels
+  bool stt_available               = 4;  // true when Translation:AudioToText is configured
 }
 ```
 
@@ -203,4 +289,17 @@ grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
   -d '{}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
+# → {"availableModels":["m2m100_418M"], "sttAvailable":true}
 ```
+
+---
+
+## Error codes
+
+| Scenario | gRPC Status |
+|---|---|
+| Unknown `model` key | `INVALID_ARGUMENT` |
+| `model` not in `AllowedModels` | `PERMISSION_DENIED` |
+| `TranscribeAudio` called when `AudioToText` is not configured | `FAILED_PRECONDITION` |
+| Invalid JSON in `TranslateLocalization` | `INVALID_ARGUMENT` |
+| Model file missing at configured path | `INTERNAL` |

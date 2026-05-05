@@ -12,4 +12,10 @@ public sealed class TranslationOptions
 
     /// <summary>Default model name when request.Provider is empty.</summary>
     public string DefaultModel { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Name of the Whisper model entry in Models (Type=Whisper) used for speech-to-text.
+    /// Empty = STT disabled (TranscribeAudio returns FailedPrecondition).
+    /// </summary>
+    public string AudioToText { get; set; } = string.Empty;
 }

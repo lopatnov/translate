@@ -20,6 +20,7 @@
     <ProjectReference Include="..\Lopatnov.Translate.M2M100\Lopatnov.Translate.M2M100.csproj" />
     <ProjectReference Include="..\Lopatnov.Translate.Nllb\Lopatnov.Translate.Nllb.csproj" />
     <ProjectReference Include="..\Lopatnov.Translate.LibreTranslate\Lopatnov.Translate.LibreTranslate.csproj" />
+    <ProjectReference Include="..\Lopatnov.Translate.Whisper\Lopatnov.Translate.Whisper.csproj" />
   </ItemGroup>
 
 </Project>

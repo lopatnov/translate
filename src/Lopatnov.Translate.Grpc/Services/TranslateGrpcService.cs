@@ -11,16 +11,19 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private readonly ModelSessionManager _manager;
     private readonly Lazy<ILanguageDetector> _detector;
-    private readonly string _defaultModel;
+    private readonly ISpeechRecognizer _recognizer;
+    private readonly TranslationOptions _translationOptions;
 
     public TranslateGrpcService(
         ModelSessionManager manager,
         Lazy<ILanguageDetector> detector,
+        ISpeechRecognizer recognizer,
         IOptions<TranslationOptions> translationOptions)
     {
         _manager = manager;
         _detector = detector;
-        _defaultModel = translationOptions.Value.DefaultModel;
+        _recognizer = recognizer;
+        _translationOptions = translationOptions.Value;
     }
 
     public override async Task<TranslateTextResponse> TranslateText(
@@ -69,7 +72,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         var response = new GetCapabilitiesResponse
         {
-            SttAvailable = false,
+            // SttAvailable reflects whether a Whisper model is configured (not NullSpeechRecognizer).
+            SttAvailable = !string.IsNullOrEmpty(_translationOptions.AudioToText),
             TtsAvailable = false,
         };
         response.AvailableModels.AddRange(_manager.GetAvailableModels());
@@ -113,9 +117,47 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
 
-    public override Task<TranscribeAudioResponse> TranscribeAudio(
+    public override async Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
-        => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));
+    {
+        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
+
+        // Whisper uses BCP-47 language codes natively (e.g. "en", "ru", "de").
+        var inputLanguage = string.IsNullOrWhiteSpace(request.Language) ||
+                            request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? "auto"
+            : LanguageCodeConverter.Convert(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+
+        Core.Models.TranscriptionResult result;
+        try
+        {
+            result = await _recognizer.TranscribeAsync(
+                request.AudioData.ToByteArray(),
+                inputLanguage,
+                context.CancellationToken);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+
+        var detectedInFormat = !string.IsNullOrEmpty(result.DetectedLanguage)
+            ? LanguageCodeConverter.Convert(result.DetectedLanguage, LanguageCodeFormat.Bcp47, langFormat)
+            : string.Empty;
+
+        var response = new TranscribeAudioResponse
+        {
+            DetectedLanguage = detectedInFormat,
+            FullText         = result.FullText,
+        };
+        response.Segments.AddRange(result.Segments.Select(s => new TranscriptionSegment
+        {
+            Text      = s.Text,
+            StartTime = s.StartTime,
+            EndTime   = s.EndTime,
+        }));
+        return response;
+    }
 
     public override Task<SynthesizeSpeechResponse> SynthesizeSpeech(
         SynthesizeSpeechRequest request, ServerCallContext context)
@@ -127,7 +169,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
     private ModelSessionManager.TranslatorLease ResolveTranslator(string? provider)
     {
-        var key = string.IsNullOrWhiteSpace(provider) ? _defaultModel : provider.Trim();
+        var key = string.IsNullOrWhiteSpace(provider) ? _translationOptions.DefaultModel : provider.Trim();
         try
         {
             return _manager.Rent(key);
