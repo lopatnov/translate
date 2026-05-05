@@ -216,7 +216,7 @@ The model is loaded lazily on first request and unloaded after `ModelTtlMinutes`
 
 ```protobuf
 message TranscribeAudioRequest {
-  bytes  audio_data      = 1;  // WAV file bytes (any sample rate / channels — resampled automatically to 16 kHz mono)
+  bytes  audio_data      = 1;  // WAV file bytes, max 50 MB (any sample rate / channels — resampled automatically to 16 kHz mono)
   string language        = 2;  // BCP-47 language hint (e.g. "en", "ru"); "" or "auto" = Whisper auto-detection
   string audio_format    = 3;  // reserved; pass "" or "wav"
   string language_format = 4;  // format for detected_language in response: "bcp47" (default) | "flores200"
