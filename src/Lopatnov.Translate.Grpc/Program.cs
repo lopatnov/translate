@@ -11,7 +11,12 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    // Allow audio payloads up to 50 MB (default is 4 MB)
+    options.MaxReceiveMessageSize = 50 * 1024 * 1024;
+    options.MaxSendMessageSize   = 50 * 1024 * 1024;
+});
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
