@@ -279,10 +279,24 @@ public static class LanguageCodeConverter
         return d;
     });
 
-    // FLORES-200 → ISO 639-3: invert the 3-letter section of _iso639_3ToFlores200
+    // FLORES-200 → ISO 639-3: invert the 3-letter section of _iso639_3ToFlores200.
+    // When multiple ISO codes share a FLORES target (e.g. "swa"/"swh" → "swh_Latn"),
+    // prefer the code whose first 3 characters match the FLORES prefix (e.g. "swh"),
+    // falling back to alphabetical order for full determinism.
     private static readonly Lazy<Dictionary<string, string>> _flores200ToIso639_3 = new(() =>
         _iso639_3ToFlores200
             .Where(kv => kv.Key.Length == 3)
             .GroupBy(kv => kv.Value)
-            .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase));
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    // e.g. "swh" from "swh_Latn"
+                    var prefix = g.Key.Split('_')[0];
+                    return g
+                        .OrderByDescending(kv => kv.Key.Equals(prefix, StringComparison.OrdinalIgnoreCase))
+                        .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                        .First().Key;
+                },
+                StringComparer.OrdinalIgnoreCase));
 }

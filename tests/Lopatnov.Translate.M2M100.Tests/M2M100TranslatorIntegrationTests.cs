@@ -38,7 +38,9 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
     public async Task TranslateAsync_ProducesExpectedEnglishOutput(
         string source, string srcLang, string tgtLang, string[] expectedKeywords)
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'. Run scripts/download-m2m100.ps1.");
+        Skip.If(!Directory.Exists(ModelPath),
+            $"M2M-100 model not found at '{ModelPath}'. " +
+            $"Download with: huggingface-cli download lopatnov/m2m100_418M-onnx --local-dir {ModelPath}");
 
         var options = new M2M100Options
         {

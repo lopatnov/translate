@@ -5,6 +5,7 @@ public sealed class TranslationOptions
     /// <summary>Restricts which models can be used by name. Empty = all configured translators allowed.</summary>
     public string[] AllowedModels { get; set; } = [];
 
+    /// <summary>Minutes a loaded model stays in memory after its last use before being evicted.</summary>
     public int ModelTtlMinutes { get; set; } = 30;
 
     /// <summary>Name of the language-detection model entry in Models. Empty = heuristic fallback.</summary>

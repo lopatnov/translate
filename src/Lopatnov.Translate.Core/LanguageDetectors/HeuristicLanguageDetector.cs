@@ -57,7 +57,7 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
 
     public LanguageDetectionResult Detect(string text)
     {
-        if (string.IsNullOrWhiteSpace(text?.Trim()))
+        if (string.IsNullOrWhiteSpace(text))
             return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200, 1f);
 
         var sample = text.Length > SampleLength ? text.AsSpan(0, SampleLength) : text.AsSpan();
