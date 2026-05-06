@@ -31,7 +31,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
-        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
         var sourceLanguage = request.SourceLanguage;
         string? detectedFlores = null;
 
@@ -85,7 +85,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
-        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
         var sourceLanguage = LanguageCodeConverter.Convert(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
         var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
@@ -112,7 +112,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         DetectLanguageRequest request, ServerCallContext context)
     {
         var detection = _detector.Value.Detect(request.Text);
-        var langFormat = string.IsNullOrEmpty(request.LanguageFormat) ? LanguageCodeFormat.Bcp47 : request.LanguageFormat.ToLanguageCodeFormat();
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
         var language = detection.ToFormat(langFormat);
         return Task.FromResult(new DetectLanguageResponse { Language = language });
     }
@@ -120,7 +120,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
     {
-        var langFormat = request.LanguageFormat.ToLanguageCodeFormat();
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
 
         // Whisper uses BCP-47 language codes natively (e.g. "en", "ru", "de").
         var inputLanguage = string.IsNullOrWhiteSpace(request.Language) ||
@@ -181,6 +181,24 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         catch (UnauthorizedAccessException)
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
+        }
+    }
+
+    /// <summary>
+    /// Converts a raw language_format string from the request to <see cref="LanguageCodeFormat"/>.
+    /// Returns <see cref="LanguageCodeFormat.Bcp47"/> when the field is empty.
+    /// Throws <see cref="RpcException"/> with <see cref="StatusCode.InvalidArgument"/> for unknown values
+    /// so the caller gets a well-formed gRPC error instead of an unhandled server exception.
+    /// </summary>
+    private static LanguageCodeFormat ResolveLanguageFormat(string? raw)
+    {
+        try
+        {
+            return (raw ?? string.Empty).ToLanguageCodeFormat();
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
         }
     }
 }

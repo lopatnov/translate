@@ -23,7 +23,7 @@ public static class LanguageCodeFormats
 
     public static LanguageCodeFormat ToLanguageCodeFormat(this string format) {
         if (string.IsNullOrEmpty(format))
-            return LanguageCodeFormat.Native;
+            return LanguageCodeFormat.Bcp47;
         var result = format.ToLowerInvariant() switch
         {
             None => LanguageCodeFormat.None,

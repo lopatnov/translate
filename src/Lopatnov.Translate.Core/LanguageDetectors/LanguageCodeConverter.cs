@@ -7,7 +7,6 @@ namespace Lopatnov.Translate.Core.LanguageDetectors;
 public static class LanguageCodeConverter
 {
     private static readonly string DefaultFloreCode = "eng_Latn";
-    private static readonly string DefaultBcp47Code = "en";
 
     /// <summary>
     /// Converts <paramref name="code"/> from <paramref name="fromFormat"/> to <paramref name="toFormat"/>.

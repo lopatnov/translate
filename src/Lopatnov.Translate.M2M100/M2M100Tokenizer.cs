@@ -106,7 +106,8 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
                 $"vocab.json not found at '{path}'. " +
                 "M2M-100 requires vocab.json for piece→HF-ID mapping.", path);
 
-        using var doc = JsonDocument.Parse(File.ReadAllText(path, System.Text.Encoding.UTF8));
+        using var stream = File.OpenRead(path);
+        using var doc = JsonDocument.Parse(stream);
         var vocab = new Dictionary<string, long>();
         var reverse = new Dictionary<long, string>();
 
