@@ -220,18 +220,21 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
         // Standard layout: dim starts at offset 8.
         br.BaseStream.Seek(8, SeekOrigin.Begin);
-        {
-            int dim = br.ReadInt32();
-            br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // ws epoch minCount neg wordNgrams
-            int loss = br.ReadInt32();
-            br.ReadInt32();            // model
-            int bucket = br.ReadInt32();
-            int minn = br.ReadInt32();
-            int maxn = br.ReadInt32();
-            br.ReadInt32();            // nthreads (training-only)
-            br.ReadDouble();           // t
-            return (new ModelParams(dim, minn, maxn, bucket, 0), loss);
-        }
+        return ReadStandardModelParams(br);
+    }
+
+    private static (ModelParams model, int loss) ReadStandardModelParams(BinaryReader br)
+    {
+        int dim = br.ReadInt32();
+        br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); br.ReadInt32(); // ws epoch minCount neg wordNgrams
+        int loss = br.ReadInt32();
+        br.ReadInt32();            // model
+        int bucket = br.ReadInt32();
+        int minn = br.ReadInt32();
+        int maxn = br.ReadInt32();
+        br.ReadInt32();            // nthreads (training-only)
+        br.ReadDouble();           // t
+        return (new ModelParams(dim, minn, maxn, bucket, 0), loss);
     }
 
     private static MatrixState ReadInputMatrixSection(BinaryReader br)
@@ -442,20 +445,24 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         for (int i = 0; i < len; i++)
         {
             if ((buf[i] & 0xC0) == 0x80) continue;
-            int start = i;
-            int n = 0;
-            for (int j = i; j < len && n < _maxn;)
+            AddCharBoundaryNgrams(buf, len, i, target, ref count);
+        }
+    }
+
+    private void AddCharBoundaryNgrams(byte[] buf, int len, int start, float[] target, ref int count)
+    {
+        int n = 0;
+        for (int j = start; j < len && n < _maxn;)
+        {
+            j++;
+            while (j < len && (buf[j] & 0xC0) == 0x80) j++;
+            n++;
+            if (n < _minn) continue;
+            int rowIdx = GetNgramRowIdx(FnvHash(buf.AsSpan(start, j - start)) % (uint)_bucket);
+            if (rowIdx >= 0)
             {
-                j++;
-                while (j < len && (buf[j] & 0xC0) == 0x80) j++;
-                n++;
-                if (n < _minn) continue;
-                int rowIdx = GetNgramRowIdx(FnvHash(buf.AsSpan(start, j - start)) % (uint)_bucket);
-                if (rowIdx >= 0)
-                {
-                    AddRowEmbedding(rowIdx, target);
-                    count++;
-                }
+                AddRowEmbedding(rowIdx, target);
+                count++;
             }
         }
     }
@@ -486,10 +493,8 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         for (int j = 0; j < _pqNsubq; j++)
         {
             int centroidIdx = _codes[codeBase + j];
-            int dsub = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
-            int centBase = j < _pqNsubq - 1
-                ? (j * KCENT + centroidIdx) * _pqDsub
-                : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
+            int dsub     = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
+            int centBase = GetCentBase(j, centroidIdx);
             for (int d = 0; d < dsub; d++) target[dimOffset + d] += _pqCentroids[centBase + d];
             dimOffset += dsub;
         }
@@ -501,14 +506,17 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         for (int j = 0; j < _pqNsubq; j++)
         {
             int centroidIdx = _codes[codeBase + j];
-            int dsub = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
-            int centBase = j < _pqNsubq - 1
-                ? (j * KCENT + centroidIdx) * _pqDsub
-                : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
+            int dsub     = j == _pqNsubq - 1 ? _pqLastDsub : _pqDsub;
+            int centBase = GetCentBase(j, centroidIdx);
             for (int d = 0; d < dsub; d++) target[dimOffset + d] += _pqCentroids[centBase + d] * (norm - 1f);
             dimOffset += dsub;
         }
     }
+
+    private int GetCentBase(int j, int centroidIdx) =>
+        j < _pqNsubq - 1
+            ? (j * KCENT + centroidIdx) * _pqDsub
+            : (_pqNsubq - 1) * KCENT * _pqDsub + centroidIdx * _pqLastDsub;
 
     // -------------------------------------------------------------------------
 

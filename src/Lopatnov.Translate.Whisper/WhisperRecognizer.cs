@@ -177,8 +177,10 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
 
             if (_factory is null)
             {
+#pragma warning disable CA1873 // ModelPath is a cheap string property
                 if (_logger is { } log)
                     log.LogInformation("Loading Whisper model from {Path}", _options.ModelPath);
+#pragma warning restore CA1873
                 _factory = CreateFactory();
             }
 
@@ -222,8 +224,10 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
             if (DateTime.UtcNow - lastUsed < _ttl)
                 return;
 
+#pragma warning disable CA1873 // _ttl is a cheap TimeSpan field
             if (_logger is { } log)
                 log.LogInformation("Evicting idle Whisper model (unused for {Ttl})", _ttl);
+#pragma warning restore CA1873
 
             _factory.Dispose();
             _factory = null;

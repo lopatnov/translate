@@ -42,17 +42,13 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         BuildLatinScoreTable();
 
     // Script counts from a single pass — bundles all counters to keep DetectCode simple.
-    private readonly struct ScriptCounts(
-        int cyrillic, int latin, int cjk, int arabic,
-        int hiragana, int katakana, int hangul,
-        int devanagari, int thai, int greek, int hebrew,
-        int ukSpec, LatinScores ls)
+    private struct ScriptCounts
     {
-        public readonly int Cyrillic = cyrillic, Latin = latin, Cjk = cjk, Arabic = arabic;
-        public readonly int Hiragana = hiragana, Katakana = katakana, Hangul = hangul;
-        public readonly int Devanagari = devanagari, Thai = thai, Greek = greek, Hebrew = hebrew;
-        public readonly int UkSpec = ukSpec;
-        public readonly LatinScores Ls = ls;
+        public int Cyrillic, Latin, Cjk, Arabic;
+        public int Hiragana, Katakana, Hangul;
+        public int Devanagari, Thai, Greek, Hebrew;
+        public int UkSpec;
+        public LatinScores Ls;
     }
 
     public LanguageDetectionResult Detect(string text)
@@ -76,7 +72,7 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         if (sc.Greek > 0 && sc.Greek > sc.Latin / 3) return Language.GreekGrek;
         if (sc.Hebrew > 0) return Language.HebrewHebr;
 
-        if (sc.Cjk > sc.Latin) return kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
+        if (sc.Cjk > sc.Latin) return ResolveCjkLanguage(kana);
         if (kana > sc.Latin && kana > sc.Cjk) return Language.JapaneseJpan;
         if (sc.Arabic > sc.Latin) return Language.ArabicArab;
         if (sc.Devanagari > sc.Latin) return Language.HindiDevanagari;
@@ -87,40 +83,35 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
 
     private static ScriptCounts CountScripts(ReadOnlySpan<char> sample)
     {
-        int cyrillic = 0, latin = 0, cjk = 0, arabic = 0;
-        int hiragana = 0, katakana = 0, hangul = 0;
-        int devanagari = 0, thai = 0, greek = 0, hebrew = 0;
-        int ukSpec = 0;
-        LatinScores ls = default;
+        ScriptCounts sc = default;
 
         foreach (var c in sample)
         {
             if (c is >= 'Ѐ' and <= 'ӿ')
             {
-                cyrillic++;
-                if (IsUkrainianSpecific(c)) ukSpec++;
+                sc.Cyrillic++;
+                if (IsUkrainianSpecific(c)) sc.UkSpec++;
             }
             else if (c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z'))
-                latin++;
+                sc.Latin++;
             else if (c is (>= 'À' and <= 'ɏ') or 'ı')
             {
-                latin++;
+                sc.Latin++;
                 if (_latinScoreTable.TryGetValue(c, out var delta))
-                    delta.Apply(ref ls);
+                    delta.Apply(ref sc.Ls);
             }
-            else if (c is >= '一' and <= '鿿') cjk++;
-            else if (c is >= '぀' and <= 'ゟ') hiragana++;
-            else if (c is >= '゠' and <= 'ヿ') katakana++;
-            else if (c is >= '؀' and <= 'ۿ') arabic++;
-            else if (c is >= 'ऀ' and <= 'ॿ') devanagari++;
-            else if (c is >= '฀' and <= '๿') thai++;
-            else if (c is (>= '가' and <= '힯') or (>= 'ᄀ' and <= 'ᇿ')) hangul++;
-            else if (c is >= 'Ͱ' and <= 'Ͽ') greek++;
-            else if (c is >= 'א' and <= 'ת') hebrew++;
+            else if (c is >= '一' and <= '鿿') sc.Cjk++;
+            else if (c is >= '぀' and <= 'ゟ') sc.Hiragana++;
+            else if (c is >= '゠' and <= 'ヿ') sc.Katakana++;
+            else if (c is >= '؀' and <= 'ۿ') sc.Arabic++;
+            else if (c is >= 'ऀ' and <= 'ॿ') sc.Devanagari++;
+            else if (c is >= '฀' and <= '๿') sc.Thai++;
+            else if (c is (>= '가' and <= '힯') or (>= 'ᄀ' and <= 'ᇿ')) sc.Hangul++;
+            else if (c is >= 'Ͱ' and <= 'Ͽ') sc.Greek++;
+            else if (c is >= 'א' and <= 'ת') sc.Hebrew++;
         }
 
-        return new ScriptCounts(cyrillic, latin, cjk, arabic, hiragana, katakana, hangul,
-            devanagari, thai, greek, hebrew, ukSpec, ls);
+        return sc;
     }
 
     private static string SelectLatinLanguage(in LatinScores s)
@@ -142,6 +133,9 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         if (s.Es == max) return Language.SpanishLatin;    // ñ
         return Language.EnglishLatin;
     }
+
+    private static string ResolveCjkLanguage(int kana) =>
+        kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
 
     private static bool IsUkrainianSpecific(char c) =>
         c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ';

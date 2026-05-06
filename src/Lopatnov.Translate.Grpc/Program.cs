@@ -15,9 +15,8 @@ builder.Services.AddGrpc(options =>
 if (builder.Environment.IsDevelopment())
     builder.Services.AddGrpcReflection();
 
-string ResolvePath(string path) =>
-    string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) ? path :
-    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, path));
+string contentRoot = builder.Environment.ContentRootPath;
+string ResolvePath(string path) => ModelBootstrap.ResolvePath(path, contentRoot);
 
 // --- Read and validate named model registry ---
 var rawModels = builder.Configuration.GetSection("Models").GetChildren()

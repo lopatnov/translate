@@ -15,6 +15,10 @@ namespace Lopatnov.Translate.Grpc;
 /// </summary>
 internal static class ModelBootstrap
 {
+    internal static string ResolvePath(string path, string contentRootPath) =>
+        string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) ? path :
+        Path.GetFullPath(Path.Combine(contentRootPath, path));
+
     internal static ILanguageDetector CreateLanguageDetector(
         IServiceProvider sp,
         string autoDetectName,
@@ -46,8 +50,10 @@ internal static class ModelBootstrap
             return new HeuristicLanguageDetector();
         }
 
+#pragma warning disable CA1873 // arguments are cheap local variables
         log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
             autoDetectName, cfg.Type, modelPath);
+#pragma warning restore CA1873
         try
         {
             return FastTextLanguageDetector.Load(modelPath, new FastTextLanguageDetectorSettings
@@ -83,8 +89,10 @@ internal static class ModelBootstrap
         var log        = sp.GetRequiredService<ILogger<WhisperRecognizer>>();
         var modelPath  = resolvePath(wCfg.Path);
 
+#pragma warning disable CA1873 // arguments are cheap local variables
         log.LogInformation("Registering Whisper STT model '{Key}' — will load lazily from {Path}",
             audioToText, modelPath);
+#pragma warning restore CA1873
 
         return new WhisperRecognizer(
             Options.Create(new WhisperOptions

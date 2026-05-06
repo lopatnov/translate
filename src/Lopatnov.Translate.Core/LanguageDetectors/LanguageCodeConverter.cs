@@ -119,7 +119,7 @@ public static class LanguageCodeConverter
             ["pan_Guru"] = "pa",
             ["npi_Deva"] = "ne",
             ["sin_Sinh"] = "si",
-            ["zho_Hans"] = "zh-Hans",
+            [Language.ChineseSimplified] = "zh-Hans",
             ["cmn_Hani"] = "zh-Hans",
             ["yue_Hant"] = "yue",
             ["jpn_Jpan"] = "ja",
@@ -164,8 +164,8 @@ public static class LanguageCodeConverter
             map.TryAdd(bcp47, flores); // first entry wins for duplicate BCP-47 values
 
         // BCP-47 aliases and macro-tags not covered by the simple inverse
-        map["zh"]      = "zho_Hans"; // plain "zh" → Simplified Chinese
-        map["zh-CN"]   = "zho_Hans";
+        map["zh"]      = Language.ChineseSimplified; // plain "zh" → Simplified Chinese
+        map["zh-CN"]   = Language.ChineseSimplified;
         map["zh-Hant"] = "zho_Hant"; // Traditional Chinese (NLLB token, not in forward map)
         map["zh-TW"]   = "zho_Hant";
         map["no"]      = "nob_Latn"; // Norwegian macro-tag → Bokmål (ISO 639-1)
@@ -229,8 +229,8 @@ public static class LanguageCodeConverter
             ["nep"] = "npi_Deva",
             ["npi"] = "npi_Deva",
             ["sin"] = "sin_Sinh",
-            ["zho"] = "zho_Hans",
-            ["cmn"] = "zho_Hans",
+            ["zho"] = Language.ChineseSimplified,
+            ["cmn"] = Language.ChineseSimplified,
             ["yue"] = "yue_Hant",
             ["jpn"] = "jpn_Jpan",
             ["kor"] = "kor_Hang",
@@ -272,7 +272,7 @@ public static class LanguageCodeConverter
             .Where(kv => kv.Value.Length == 2)
             .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
         // BCP-47 complex tags (zh-Hans etc.) collapse to the 2-letter ISO 639-1 macro-tag
-        d["zho_Hans"] = "zh";
+        d[Language.ChineseSimplified] = "zh";
         d["zho_Hant"] = "zh";
         d["cmn_Hani"] = "zh";
         d["yue_Hant"] = "zh";
