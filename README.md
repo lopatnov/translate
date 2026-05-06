@@ -5,7 +5,6 @@
 [![CI](https://github.com/lopatnov/translate/actions/workflows/ci.yml/badge.svg)](https://github.com/lopatnov/translate/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/lopatnov/translate)](https://github.com/lopatnov/translate/issues)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=lopatnov_translate&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=lopatnov_translate)
 [![GitHub stars](https://img.shields.io/github/stars/lopatnov/translate?style=social)](https://github.com/lopatnov/translate/stargazers)
 
 A self-hosted gRPC service for text translation, language detection, and speech-to-text transcription. All models run locally — no cloud dependencies. Multiple models can be configured by name and selected per request.
