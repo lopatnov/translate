@@ -38,8 +38,8 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            // FLORES-200 codes pass through unchanged when not found in BCP-47 dict
-            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = provider,
+            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
+            Model = provider, LanguageFormat = "flores200",
         }, ctx.Object);
 
         Assert.Equal("translated", response.TranslatedText);
@@ -63,6 +63,7 @@ public sealed class TranslateGrpcServiceTests
         var response = await svc.TranslateText(new TranslateTextRequest
         {
             Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
+            LanguageFormat = "flores200",
         }, ctx.Object);
 
         Assert.Equal("nllb", response.ModelUsed);
@@ -102,7 +103,8 @@ public sealed class TranslateGrpcServiceTests
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
             svc.TranslateText(new TranslateTextRequest
             {
-                Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = "m2m100",
+                Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
+                Model = "m2m100", LanguageFormat = "flores200",
             }, ctx.Object));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
@@ -201,7 +203,8 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl", Model = "nllb",
+            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
+            Model = "nllb", LanguageFormat = "flores200",
         }, ctx.Object);
 
         mockDetector.Verify(d => d.Detect(It.IsAny<string>()), Times.Never);

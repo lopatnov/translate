@@ -406,11 +406,11 @@ huggingface-cli download ggerganov/whisper.cpp ggml-small.bin \
 "Models": {
   "whisper-small": {
     "Type": "Whisper",
-    "Path": "../../models/audio-to-text/whisper.cpp/ggml-small.bin"
+    "Path": "./models/audio-to-text/whisper.cpp/ggml-small.bin"
   },
   "whisper-medium": {
     "Type": "Whisper",
-    "Path": "../../models/audio-to-text/whisper.cpp/ggml-medium.bin"
+    "Path": "./models/audio-to-text/whisper.cpp/ggml-medium.bin"
   }
 },
 "Translation": {

@@ -9,6 +9,7 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     public const long EosTokenId = 2;
     public const long PadTokenId = 1;
     public const long BosTokenId = 0;
+    public const long UnkTokenId = 3; // <unk>
 
     private const char SentencePiecePrefixChar = '▁'; // ▁ (U+2581) — SentencePiece word-boundary marker
 
@@ -16,6 +17,7 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     private readonly Dictionary<string, long> _vocab;        // piece string → HF token ID
     private readonly Dictionary<long, string> _reverseVocab; // HF token ID → piece string
     private readonly Dictionary<string, long> _isoToTokenId; // ISO 639-1 lang code → token ID
+    private readonly HashSet<long> _langTokenIds;             // pre-computed set for Decode filtering
 
     // Maps FLORES-200 codes (used by ITextTranslator callers) to M2M-100 ISO 639-1/language codes.
     // Covers all 100 languages supported by M2M-100, plus zho_Hant → zh fallback
@@ -81,6 +83,7 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
 
         var configPath = Path.Combine(modelDir, configFile);
         _isoToTokenId = LoadLanguageTokenIds(configPath);
+        _langTokenIds = new HashSet<long>(_isoToTokenId.Values); // pre-compute for Decode
 
         var vocabPath = Path.Combine(modelDir, vocabFile);
         (_vocab, _reverseVocab) = LoadVocabJson(vocabPath);
@@ -101,18 +104,16 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
         var result = new long[tokens.Count + 2];
         result[0] = langId;
         for (var i = 0; i < tokens.Count; i++)
-            result[i + 1] = _vocab.TryGetValue(tokens[i].Value, out var hfId) ? hfId : 3L; // 3 = <unk>
+            result[i + 1] = _vocab.TryGetValue(tokens[i].Value, out var hfId) ? hfId : UnkTokenId;
         result[^1] = EosTokenId;
         return result;
     }
 
     public string Decode(IEnumerable<long> tokenIds)
     {
-        var langIds = new HashSet<long>(_isoToTokenId.Values);
-
         // Regular BPE token IDs are in [4, 128003]; filter out special tokens (0–3) and lang tokens (128004+).
         var pieces = tokenIds
-            .Where(id => id >= 4 && !langIds.Contains(id))
+            .Where(id => id >= 4 && !_langTokenIds.Contains(id))
             .Select(id => _reverseVocab.TryGetValue(id, out var p) ? p : string.Empty)
             .Where(p => p.Length > 0);
 

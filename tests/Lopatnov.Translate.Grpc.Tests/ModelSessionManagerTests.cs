@@ -66,11 +66,12 @@ public sealed class ModelSessionManagerTests
     [Fact]
     public void Get_AllowsProvider_WhenAllowlistIsEmpty()
     {
-        var mock = new Mock<ITextTranslator>();
-        using var mgr = Build(new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object });
+        var mockNllb = new Mock<ITextTranslator>();
+        var mockM2m = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["nllb"] = () => mockNllb.Object, ["m2m100"] = () => mockM2m.Object });
 
-        Assert.Same(mock.Object, mgr.Get("nllb"));
-        Assert.Same(mock.Object, mgr.Get("m2m100"));
+        Assert.Same(mockNllb.Object, mgr.Get("nllb"));
+        Assert.Same(mockM2m.Object, mgr.Get("m2m100"));
     }
 
     // --- Rent() / TranslatorLease ---
@@ -159,14 +160,15 @@ public sealed class ModelSessionManagerTests
     [Fact]
     public void Rent_AllowsProvider_WhenAllowlistIsEmpty()
     {
-        var mock = new Mock<ITextTranslator>();
-        using var mgr = Build(new() { ["nllb"] = () => mock.Object, ["m2m100"] = () => mock.Object });
+        var mockNllb = new Mock<ITextTranslator>();
+        var mockM2m = new Mock<ITextTranslator>();
+        using var mgr = Build(new() { ["nllb"] = () => mockNllb.Object, ["m2m100"] = () => mockM2m.Object });
 
         using var l1 = mgr.Rent("nllb");
         using var l2 = mgr.Rent("m2m100");
 
-        Assert.Same(mock.Object, l1.Translator);
-        Assert.Same(mock.Object, l2.Translator);
+        Assert.Same(mockNllb.Object, l1.Translator);
+        Assert.Same(mockM2m.Object, l2.Translator);
     }
 
     [Fact]

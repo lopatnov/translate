@@ -19,7 +19,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8g    # NLLB 600M float32 ~4 GB; 1.3B ~8 GB
+          memory: 8g    # NLLB 600M ~4 GB; M2M-100 418M ~2 GB; Whisper small ~1 GB, medium ~3 GB
           cpus: '2.0'
 
   # Uncomment to enable LibreTranslate fallback.
