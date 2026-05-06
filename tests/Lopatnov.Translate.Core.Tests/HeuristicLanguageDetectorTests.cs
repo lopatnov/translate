@@ -73,8 +73,8 @@ public sealed class HeuristicLanguageDetectorTests
     public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
     {
         var result = _detector.Detect(text!);
-        Assert.Equal(LanguageCodeFormat.None, result.NativeFormat);
-        Assert.Equal(Language.EnglishLatin, result.Flores200); // None → default English
+        Assert.Equal(LanguageCodeFormat.Flores200, result.NativeFormat);
+        Assert.Equal(Language.EnglishLatin, result.Flores200);
         Assert.Equal("en", result.Bcp47);
     }
 

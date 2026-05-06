@@ -6,7 +6,6 @@ namespace Lopatnov.Translate.Core.LanguageDetectors;
 /// </summary>
 public static class LanguageCodeConverter
 {
-    private static readonly string DefaultFloreCode = "eng_Latn";
 
     /// <summary>
     /// Converts <paramref name="code"/> from <paramref name="fromFormat"/> to <paramref name="toFormat"/>.
@@ -37,10 +36,10 @@ public static class LanguageCodeConverter
     {
         if (string.IsNullOrEmpty(code) || fromFormat == toFormat || toFormat == LanguageCodeFormat.Native || toFormat == LanguageCodeFormat.None) return code;
 
-        // None format → normalise to the default English FLORES-200 before converting
+        // None format → passthrough (no detection result; do not coerce to English)
         string flores = fromFormat switch
         {
-            LanguageCodeFormat.None      => DefaultFloreCode,
+            LanguageCodeFormat.None      => code,
             LanguageCodeFormat.Flores200 => code,
             LanguageCodeFormat.ISO639_1 or
             LanguageCodeFormat.ISO639_2 or
@@ -202,8 +201,8 @@ public static class LanguageCodeConverter
             ["zh"] = "zho_Hans",
             ["zh-Hans"] = "zho_Hans",
             ["zh-CN"] = "zho_Hans",
-            ["zh-Hant"] = "zho_Hans",
-            ["zh-TW"] = "zho_Hans",
+            ["zh-Hant"] = "zho_Hant",
+            ["zh-TW"] = "zho_Hant",
             ["yue"] = "yue_Hant",
             ["ja"] = "jpn_Jpan",
             ["ko"] = "kor_Hang",

@@ -52,8 +52,14 @@ grpcurl -plaintext \
 ### 5. Transcribe audio
 
 ```bash
+# Linux
 grpcurl -plaintext \
   -d "{\"audio_data\": \"$(base64 -w0 my-audio.wav)\", \"language\": \"auto\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+
+# macOS (base64 has no -w flag)
+grpcurl -plaintext \
+  -d "{\"audio_data\": \"$(base64 my-audio.wav | tr -d '\n')\", \"language\": \"auto\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 ```
 

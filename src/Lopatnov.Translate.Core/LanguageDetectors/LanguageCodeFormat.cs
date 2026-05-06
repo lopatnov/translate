@@ -26,8 +26,8 @@ public static class LanguageCodeFormats
             return LanguageCodeFormat.Bcp47;
         var result = format.ToLowerInvariant() switch
         {
-            None => LanguageCodeFormat.None,
-            "n/a" => LanguageCodeFormat.None,
+            // Note: None constant is "N/A" (uppercase), so only the lowercase literal matches
+            "n/a" or "none" => LanguageCodeFormat.None,
             Native => LanguageCodeFormat.Native,
             "bcp-47" => LanguageCodeFormat.Bcp47,
             Bcp47 => LanguageCodeFormat.Bcp47,

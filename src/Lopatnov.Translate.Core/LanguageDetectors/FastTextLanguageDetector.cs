@@ -120,7 +120,8 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     public static FastTextLanguageDetector Load(string path, FastTextLanguageDetectorSettings settings)
     {
-        using var br = new BinaryReader(File.OpenRead(path), Encoding.UTF8, leaveOpen: false);
+        using var fs = File.OpenRead(path);
+        using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
 
         int magic = br.ReadInt32();
         if (magic != MAGIC)

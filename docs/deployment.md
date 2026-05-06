@@ -20,6 +20,10 @@ Published images are available at `ghcr.io/lopatnov/translate`. **Model files ar
 huggingface-cli download lopatnov/m2m100_418M-onnx `
   --local-dir ./models/translate/m2m100_418M
 
+# Language detection — required for source_language:"auto" and DetectLanguage RPC (CC-BY-SA 3.0)
+huggingface-cli download lopatnov/fasttext-language-id lid.176.ftz `
+  --local-dir ./models/detect-lang/fasttext-language-id
+
 # Speech-to-text model (MIT)
 .\scripts\download-whisper.ps1 -ModelSize small
 ```

@@ -10,7 +10,7 @@ public sealed class TranslationOptions
     /// <summary>Name of the language-detection model entry in Models. Empty = heuristic fallback.</summary>
     public string AutoDetect { get; set; } = string.Empty;
 
-    /// <summary>Default model name when request.Provider is empty.</summary>
+    /// <summary>Default model name when request.model is empty.</summary>
     public string DefaultModel { get; set; } = string.Empty;
 
     /// <summary>
