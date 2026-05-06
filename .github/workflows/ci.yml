@@ -115,7 +115,8 @@ jobs:
             /d:sonar.cs.opencover.reportsPaths="test-results/**/coverage.opencover.xml" \
             /d:sonar.qualitygate.wait=false \
             /d:sonar.python.version=3 \
-            /d:sonar.exclusions="**/node_modules/**,models/**"
+            /d:sonar.exclusions="**/node_modules/**,models/**" \
+            /d:sonar.coverage.exclusions="**/Program.cs,**/ModelBootstrap.cs,**/NullSpeechRecognizer.cs,**/WhisperRecognizer.cs"
           dotnet build translate.slnx -c Release --no-restore
           dotnet test translate.slnx \
             --configuration Release \

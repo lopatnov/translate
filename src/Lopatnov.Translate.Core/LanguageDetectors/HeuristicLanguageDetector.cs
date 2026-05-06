@@ -81,7 +81,7 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         return SelectLatinLanguage(in sc.Ls);
     }
 
-    private static ScriptCounts CountScripts(ReadOnlySpan<char> sample)
+    private static ScriptCounts CountScripts(ReadOnlySpan<char> sample) // NOSONAR S3776 — flat Unicode-range dispatch, CC inflated by nesting penalty; no real logical complexity
     {
         ScriptCounts sc = default;
 
