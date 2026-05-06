@@ -107,7 +107,9 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.opencover.reportsPaths="test-results/**/coverage.opencover.xml" \
-            /d:sonar.qualitygate.wait=false
+            /d:sonar.qualitygate.wait=false \
+            /d:sonar.python.version=3 \
+            /d:sonar.exclusions="**/node_modules/**,models/**"
           dotnet build translate.slnx -c Release --no-restore
           dotnet test translate.slnx \
             --configuration Release \
