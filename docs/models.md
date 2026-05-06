@@ -385,20 +385,17 @@ Runs locally via [Whisper.net](https://github.com/sandrohanea/whisper.net) (a ma
 
 **Download**
 
-```powershell
+```bash
 # small (~500 MB) — recommended default
-.\scripts\download-whisper.ps1 -ModelSize small
+huggingface-cli download lopatnov/whisper.cpp ggml-small.bin \
+  --local-dir ./models/audio-to-text/whisper.cpp
 
 # medium (~1.5 GB) — better quality
-.\scripts\download-whisper.ps1 -ModelSize medium
-```
-
-Or manually:
-
-```bash
-huggingface-cli download ggerganov/whisper.cpp ggml-small.bin \
+huggingface-cli download lopatnov/whisper.cpp ggml-medium.bin \
   --local-dir ./models/audio-to-text/whisper.cpp
 ```
+
+HuggingFace repo: [lopatnov/whisper.cpp](https://huggingface.co/lopatnov/whisper.cpp)
 
 **appsettings.json**
 

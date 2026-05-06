@@ -25,7 +25,8 @@ huggingface-cli download lopatnov/fasttext-language-id lid.176.ftz `
   --local-dir ./models/detect-lang/fasttext-language-id
 
 # Speech-to-text model (MIT)
-.\scripts\download-whisper.ps1 -ModelSize small
+huggingface-cli download lopatnov/whisper.cpp ggml-small.bin `
+  --local-dir ./models/audio-to-text/whisper.cpp
 ```
 
 **Step 2 — run with Docker Compose** (recommended):

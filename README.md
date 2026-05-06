@@ -25,12 +25,12 @@ cd translate
 
 Download the default translation and STT models:
 
-```powershell
-# Speech-to-text (Whisper small, ~500 MB)
-.\scripts\download-whisper.ps1 -ModelSize small
-
+```bash
 # Translation model — see docs/models.md for all options
 huggingface-cli download lopatnov/m2m100_418M-onnx --local-dir ./models/translate/m2m100_418M
+
+# Speech-to-text (Whisper small, ~500 MB)
+huggingface-cli download lopatnov/whisper.cpp ggml-small.bin --local-dir ./models/audio-to-text/whisper.cpp
 ```
 
 See [docs/models.md](docs/models.md) for all available models and configuration.
@@ -96,14 +96,11 @@ tests/
   Lopatnov.Translate.M2M100.Tests/   # tokenizer, translator, integration
   Lopatnov.Translate.Whisper.Tests/  # audio resampling, recognizer, integration
 
-models/                              # gitignored — populate with download scripts
+models/                              # gitignored — populate via huggingface-cli (see docs/models.md)
   translate/                         # M2M-100, NLLB ONNX files
   detect-lang/                       # FastText LID-176, GlotLID
   audio-to-text/                     # Whisper ggml files
   text-to-audio/                     # Piper voice files
-
-scripts/
-  download-whisper.ps1               # fetch Whisper ggml model from HuggingFace
 
 docker/
   Dockerfile
