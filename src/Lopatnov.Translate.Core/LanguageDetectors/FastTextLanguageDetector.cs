@@ -298,7 +298,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             int end = remaining.IndexOfAny(_whitespace);
             var token = end < 0 ? remaining : remaining[..end];
             remaining = end < 0 ? default : remaining[end..];
-            AddWordFeatures(token.ToString(), h, ref count);
+            AddWordFeatures(token, h, ref count);
         }
 
         if (count == 0)
@@ -410,9 +410,11 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
-    private void AddWordFeatures(string word, float[] target, ref int count)
+    private void AddWordFeatures(ReadOnlySpan<char> word, float[] target, ref int count)
     {
-        if (_wordToId.TryGetValue(word, out int wordRow))
+        // GetAlternateLookup returns a lightweight struct — no allocation.
+        // StringComparer.Ordinal (used at construction) implements IAlternateEqualityComparer<ReadOnlySpan<char>, string>.
+        if (_wordToId.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(word, out int wordRow))
         {
             AddRowEmbedding(wordRow, target);
             count++;

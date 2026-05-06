@@ -139,17 +139,26 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
         if (reader.WaveFormat.SampleRate != 16_000)
             provider = new WdlResamplingSampleProvider(provider, 16_000);
 
-        const int bufferSize = 8192;
-        var result = new List<float>();
-        var buffer = new float[bufferSize];
+        // Pre-allocate based on estimated output length: mono frames * (16 kHz / src rate).
+        // SampleCount is total interleaved samples (frames × channels), so divide by Channels
+        // to get the frame count before the stereo→mono step.
+        const int bufferSize = 4096;
+        int estimatedSamples = (int)(reader.SampleCount / reader.WaveFormat.Channels
+                                     * (16_000.0 / reader.WaveFormat.SampleRate))
+                               + bufferSize; // safety margin
+        var resultBuffer = new float[estimatedSamples];
+        int totalWritten = 0;
+        var readBuffer = new float[bufferSize];
         int read;
-        while ((read = provider.Read(buffer, 0, bufferSize)) > 0)
+        while ((read = provider.Read(readBuffer, 0, bufferSize)) > 0)
         {
-            for (int i = 0; i < read; i++)
-                result.Add(buffer[i]);
+            if (totalWritten + read > resultBuffer.Length)
+                Array.Resize(ref resultBuffer, Math.Max(resultBuffer.Length * 2, totalWritten + read));
+            readBuffer.AsSpan(0, read).CopyTo(resultBuffer.AsSpan(totalWritten));
+            totalWritten += read;
         }
 
-        return [.. result];
+        return resultBuffer[..totalWritten];
     }
 
     // -------------------------------------------------------------------------
