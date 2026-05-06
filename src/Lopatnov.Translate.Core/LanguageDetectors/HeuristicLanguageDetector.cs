@@ -127,10 +127,8 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
 
             // ── Spanish ─────────────────────────────────────────────────────────
             case 'ñ' or 'Ñ': s.Es += 5; break;                    // unique
-            case 'á' or 'Á': s.Es += 1; s.Pt += 1; s.Hu += 1; break;
-            case 'ó' or 'Ó': s.Es += 1; s.Pt += 1; s.Hu += 1; break;
-            case 'í' or 'Í': s.Es += 1; s.Pt += 1; s.Hu += 1; break; // Czech uses í but not distinctively
-            case 'ú' or 'Ú': s.Es += 1; s.Pt += 1; s.Hu += 1; break;
+            case 'á' or 'Á' or 'ó' or 'Ó' or 'í' or 'Í' or 'ú' or 'Ú':
+                s.Es += 1; s.Pt += 1; s.Hu += 1; break; // shared vowels; Czech uses these but not distinctively
 
             // ── Portuguese ──────────────────────────────────────────────────────
             case 'ã' or 'Ã' or 'õ' or 'Õ': s.Pt += 5; break;     // unique
@@ -158,9 +156,7 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
             // ── Czech / Slovak ──────────────────────────────────────────────────
             case 'ě' or 'Ě': s.Cs += 5; break;                    // unique to Czech
             case 'ř' or 'Ř': s.Cs += 5; break;                    // unique to Czech
-            case 'š' or 'Š': s.Cs += 2; s.Tr += 1; break;
-            case 'č' or 'Č': s.Cs += 2; s.Tr += 1; break;
-            case 'ž' or 'Ž': s.Cs += 2; s.Tr += 1; break;
+            case 'š' or 'Š' or 'č' or 'Č' or 'ž' or 'Ž': s.Cs += 2; s.Tr += 1; break; // caron consonants
             case 'ľ' or 'Ľ' or 'ŕ' or 'Ŕ' or 'ĺ' or 'Ĺ': s.Cs += 3; break; // Slovak
 
             // ── Turkish ─────────────────────────────────────────────────────────

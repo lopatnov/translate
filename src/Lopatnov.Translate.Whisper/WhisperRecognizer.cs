@@ -177,8 +177,8 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
 
             if (_factory is null)
             {
-                _logger?.LogInformation(
-                    "Loading Whisper model from {Path}", _options.ModelPath);
+                if (_logger is { } log)
+                    log.LogInformation("Loading Whisper model from {Path}", _options.ModelPath);
                 _factory = CreateFactory();
             }
 
@@ -222,8 +222,8 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
             if (DateTime.UtcNow - lastUsed < _ttl)
                 return;
 
-            _logger?.LogInformation(
-                "Evicting idle Whisper model (unused for {Ttl})", _ttl);
+            if (_logger is { } log)
+                log.LogInformation("Evicting idle Whisper model (unused for {Ttl})", _ttl);
 
             _factory.Dispose();
             _factory = null;

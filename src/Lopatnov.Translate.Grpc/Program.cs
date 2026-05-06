@@ -107,8 +107,10 @@ builder.Services.AddSingleton<ILanguageDetector>(sp =>
         return new HeuristicLanguageDetector();
     }
 
+#pragma warning disable CA1873 // arguments are cheap local variables — false positive
     log.LogInformation("Loading LangDetect '{Name}' ({Type}) from {Path}",
         autoDetectName, cfg.Type, modelPath);
+#pragma warning restore CA1873
     try
     {
         return FastTextLanguageDetector.Load(modelPath, new FastTextLanguageDetectorSettings
@@ -143,8 +145,10 @@ builder.Services.AddSingleton<ISpeechRecognizer>(sp =>
     var log        = sp.GetRequiredService<ILogger<WhisperRecognizer>>();
     var modelPath  = ResolvePath(wCfg.Path);
 
+#pragma warning disable CA1873 // arguments are cheap local variables — false positive
     log.LogInformation(
         "Registering Whisper STT model '{Key}' — will load lazily from {Path}", audioToText, modelPath);
+#pragma warning restore CA1873
 
     return new WhisperRecognizer(
         Options.Create(new WhisperOptions

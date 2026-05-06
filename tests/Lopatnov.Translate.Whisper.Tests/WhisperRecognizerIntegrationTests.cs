@@ -1,3 +1,4 @@
+using Lopatnov.Translate.Core.Models;
 using Lopatnov.Translate.Whisper;
 using Microsoft.Extensions.Options;
 using NAudio.Wave;
@@ -85,11 +86,16 @@ public sealed class WhisperRecognizerIntegrationTests
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // cancel immediately
 
-        // Should either complete quickly or throw OperationCanceledException
+        // Should either complete quickly or throw OperationCanceledException — both are valid.
+        TranscriptionResult? result = null;
+        var wasCancelled = false;
         try
         {
-            await sut.TranscribeAsync(wav, "auto", cts.Token);
+            result = await sut.TranscribeAsync(wav, "auto", cts.Token);
         }
-        catch (OperationCanceledException) { /* expected */ }
+        catch (OperationCanceledException) { wasCancelled = true; }
+
+        Assert.True(wasCancelled || result is not null,
+            "Expected either OperationCanceledException or a valid TranscriptionResult.");
     }
 }
