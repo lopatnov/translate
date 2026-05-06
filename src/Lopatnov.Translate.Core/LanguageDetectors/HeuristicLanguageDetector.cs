@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Lopatnov.Translate.Core.Abstractions;
 
 namespace Lopatnov.Translate.Core.LanguageDetectors;
@@ -25,6 +26,35 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         }
     }
 
+    // Per-character Latin score increments stored in a frozen lookup table.
+    private readonly record struct ScoreDelta(
+        sbyte De = 0, sbyte Fr = 0, sbyte Es = 0, sbyte Pl = 0, sbyte Pt = 0,
+        sbyte It = 0, sbyte Ro = 0, sbyte Sv = 0, sbyte Cs = 0, sbyte Tr = 0, sbyte Hu = 0)
+    {
+        public readonly void Apply(ref LatinScores s)
+        {
+            s.De += De; s.Fr += Fr; s.Es += Es; s.Pl += Pl; s.Pt += Pt;
+            s.It += It; s.Ro += Ro; s.Sv += Sv; s.Cs += Cs; s.Tr += Tr; s.Hu += Hu;
+        }
+    }
+
+    private static readonly FrozenDictionary<char, ScoreDelta> _latinScoreTable =
+        BuildLatinScoreTable();
+
+    // Script counts from a single pass — bundles all counters to keep DetectCode simple.
+    private readonly struct ScriptCounts(
+        int cyrillic, int latin, int cjk, int arabic,
+        int hiragana, int katakana, int hangul,
+        int devanagari, int thai, int greek, int hebrew,
+        int ukSpec, LatinScores ls)
+    {
+        public readonly int Cyrillic = cyrillic, Latin = latin, Cjk = cjk, Arabic = arabic;
+        public readonly int Hiragana = hiragana, Katakana = katakana, Hangul = hangul;
+        public readonly int Devanagari = devanagari, Thai = thai, Greek = greek, Hebrew = hebrew;
+        public readonly int UkSpec = ukSpec;
+        public readonly LatinScores Ls = ls;
+    }
+
     public LanguageDetectionResult Detect(string text)
     {
         if (string.IsNullOrWhiteSpace(text?.Trim()))
@@ -35,6 +65,27 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
     }
 
     private static string DetectCode(ReadOnlySpan<char> sample)
+    {
+        var sc = CountScripts(sample);
+        int kana = sc.Hiragana + sc.Katakana;
+
+        if (sc.Cyrillic > 0 && sc.Cyrillic >= sc.Latin && sc.Cyrillic >= sc.Cjk && sc.Cyrillic >= sc.Arabic)
+            return sc.UkSpec > 0 ? Language.UkrainianCyrillic : Language.RussianCyrillic;
+
+        if (sc.Hangul > 0) return Language.KoreanHangul;
+        if (sc.Greek > 0 && sc.Greek > sc.Latin / 3) return Language.GreekGrek;
+        if (sc.Hebrew > 0) return Language.HebrewHebr;
+
+        if (sc.Cjk > sc.Latin) return kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
+        if (kana > sc.Latin && kana > sc.Cjk) return Language.JapaneseJpan;
+        if (sc.Arabic > sc.Latin) return Language.ArabicArab;
+        if (sc.Devanagari > sc.Latin) return Language.HindiDevanagari;
+        if (sc.Thai > sc.Latin) return Language.ThaiThai;
+
+        return SelectLatinLanguage(in sc.Ls);
+    }
+
+    private static ScriptCounts CountScripts(ReadOnlySpan<char> sample)
     {
         int cyrillic = 0, latin = 0, cjk = 0, arabic = 0;
         int hiragana = 0, katakana = 0, hangul = 0;
@@ -51,10 +102,11 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
             }
             else if (c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z'))
                 latin++;
-            else if (c is (>= 'À' and <= 'ɏ') or 'ı') // Latin Extended + Turkish dotless-i
+            else if (c is (>= 'À' and <= 'ɏ') or 'ı')
             {
                 latin++;
-                ScoreLatinChar(c, ref ls);
+                if (_latinScoreTable.TryGetValue(c, out var delta))
+                    delta.Apply(ref ls);
             }
             else if (c is >= '一' and <= '鿿') cjk++;
             else if (c is >= '぀' and <= 'ゟ') hiragana++;
@@ -67,22 +119,8 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
             else if (c is >= 'א' and <= 'ת') hebrew++;
         }
 
-        int kana = hiragana + katakana;
-
-        if (cyrillic > 0 && cyrillic >= latin && cyrillic >= cjk && cyrillic >= arabic)
-            return ukSpec > 0 ? Language.UkrainianCyrillic : Language.RussianCyrillic;
-
-        if (hangul > 0) return Language.KoreanHangul;
-        if (greek > 0 && greek > latin / 3) return Language.GreekGrek;
-        if (hebrew > 0) return Language.HebrewHebr;
-
-        if (cjk > latin) return kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
-        if (kana > latin && kana > cjk) return Language.JapaneseJpan;
-        if (arabic > latin) return Language.ArabicArab;
-        if (devanagari > latin) return Language.HindiDevanagari;
-        if (thai > latin) return Language.ThaiThai;
-
-        return SelectLatinLanguage(in ls);
+        return new ScriptCounts(cyrillic, latin, cjk, arabic, hiragana, katakana, hangul,
+            devanagari, thai, greek, hebrew, ukSpec, ls);
     }
 
     private static string SelectLatinLanguage(in LatinScores s)
@@ -105,70 +143,72 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         return Language.EnglishLatin;
     }
 
-    private static void ScoreLatinChar(char c, ref LatinScores s)
-    {
-        switch (c)
-        {
-            // ── German ──────────────────────────────────────────────────────────
-            case 'ß': s.De += 5; break;                            // unique
-            case 'ä' or 'Ä' or 'ö' or 'Ö': s.De += 2; s.Sv += 1; break; // also Swedish/Finnish
-            case 'ü' or 'Ü': s.De += 2; s.Tr += 1; break;                // also Turkish
-
-            // ── French ──────────────────────────────────────────────────────────
-            case 'œ' or 'Œ': s.Fr += 5; break;                    // unique
-            case 'ê' or 'Ê' or 'ô' or 'Ô': s.Fr += 2; break;
-            case 'ë' or 'Ë' or 'ï' or 'Ï': s.Fr += 2; break;
-            case 'û' or 'Û': s.Fr += 2; break;
-            case 'â' or 'Â': s.Fr += 1; s.Ro += 1; break;         // also Romanian
-            case 'ç' or 'Ç': s.Fr += 2; s.Pt += 1; s.Tr += 1; break; // also PT/TR
-            case 'é' or 'É': s.Fr += 1; s.Pt += 1; break;           // Czech uses é but it's not distinctive
-            case 'è' or 'È': s.Fr += 1; s.It += 2; break;         // stronger Italian signal
-            case 'à' or 'À': s.Fr += 1; s.It += 1; s.Pt += 1; break;
-
-            // ── Spanish ─────────────────────────────────────────────────────────
-            case 'ñ' or 'Ñ': s.Es += 5; break;                    // unique
-            case 'á' or 'Á' or 'ó' or 'Ó' or 'í' or 'Í' or 'ú' or 'Ú':
-                s.Es += 1; s.Pt += 1; s.Hu += 1; break; // shared vowels; Czech uses these but not distinctively
-
-            // ── Portuguese ──────────────────────────────────────────────────────
-            case 'ã' or 'Ã' or 'õ' or 'Õ': s.Pt += 5; break;     // unique
-
-            // ── Italian ─────────────────────────────────────────────────────────
-            case 'ì' or 'Ì': s.It += 3; break;                    // rare outside Italian
-            case 'ò' or 'Ò': s.It += 3; break;
-            case 'ù' or 'Ù': s.It += 2; s.Fr += 1; break;
-
-            // ── Polish ──────────────────────────────────────────────────────────
-            case 'ą' or 'Ą' or 'ę' or 'Ę': s.Pl += 5; break;     // unique
-            case 'ś' or 'Ś' or 'ź' or 'Ź' or 'ż' or 'Ż'
-              or 'ć' or 'Ć' or 'ń' or 'Ń': s.Pl += 3; break;
-
-            // ── Romanian ────────────────────────────────────────────────────────
-            case 'ă' or 'Ă': s.Ro += 5; break;                    // unique
-            case 'ș' or 'Ș' or 'ț' or 'Ț': s.Ro += 5; break;     // comma-below (correct form)
-            case 'ţ' or 'Ţ': s.Ro += 4; break;                    // cedilla-t (legacy Romanian)
-            case 'î' or 'Î': s.Ro += 2; s.Fr += 1; break;         // common in Romanian
-
-            // ── Swedish / Nordic ────────────────────────────────────────────────
-            case 'å' or 'Å': s.Sv += 5; break;                    // unique to Nordic
-            case 'ø' or 'Ø' or 'æ' or 'Æ': s.Sv += 3; break;     // Norwegian / Danish
-
-            // ── Czech / Slovak ──────────────────────────────────────────────────
-            case 'ě' or 'Ě': s.Cs += 5; break;                    // unique to Czech
-            case 'ř' or 'Ř': s.Cs += 5; break;                    // unique to Czech
-            case 'š' or 'Š' or 'č' or 'Č' or 'ž' or 'Ž': s.Cs += 2; s.Tr += 1; break; // caron consonants
-            case 'ľ' or 'Ľ' or 'ŕ' or 'Ŕ' or 'ĺ' or 'Ĺ': s.Cs += 3; break; // Slovak
-
-            // ── Turkish ─────────────────────────────────────────────────────────
-            case 'ş' or 'Ş': s.Tr += 5; break;                    // unique (cedilla-s)
-            case 'ğ' or 'Ğ': s.Tr += 5; break;                    // unique
-            case 'ı': s.Tr += 3; break;                       // ı (dotless i)
-
-            // ── Hungarian ───────────────────────────────────────────────────────
-            case 'ő' or 'Ő' or 'ű' or 'Ű': s.Hu += 5; break;     // double acute — unique
-        }
-    }
-
     private static bool IsUkrainianSpecific(char c) =>
         c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ';
+
+    private static FrozenDictionary<char, ScoreDelta> BuildLatinScoreTable()
+    {
+        var t = new Dictionary<char, ScoreDelta>();
+
+        void Set(char c, ScoreDelta d) => t[c] = d;
+        void Each(string chars, ScoreDelta d) { foreach (var c in chars) t[c] = d; }
+
+        // German
+        Set('ß', new(De: 5));
+        Each("äÄöÖ", new(De: 2, Sv: 1));   // also Swedish/Finnish
+        Each("üÜ",   new(De: 2, Tr: 1));    // also Turkish
+
+        // French
+        Each("œŒ",   new(Fr: 5));
+        Each("êÊôÔ", new(Fr: 2));
+        Each("ëËïÏ", new(Fr: 2));
+        Each("ûÛ",   new(Fr: 2));
+        Each("âÂ",   new(Fr: 1, Ro: 1));    // also Romanian
+        Each("çÇ",   new(Fr: 2, Pt: 1, Tr: 1)); // also PT/TR
+        Each("éÉ",   new(Fr: 1, Pt: 1));
+        Each("èÈ",   new(Fr: 1, It: 2));    // stronger Italian signal
+        Each("àÀ",   new(Fr: 1, It: 1, Pt: 1));
+
+        // Spanish
+        Each("ñÑ",       new(Es: 5));
+        Each("áÁóÓíÍúÚ", new(Es: 1, Pt: 1, Hu: 1)); // shared vowels; Czech uses these but not distinctively
+
+        // Portuguese
+        Each("ãÃõÕ", new(Pt: 5));
+
+        // Italian
+        Each("ìÌ", new(It: 3));
+        Each("òÒ", new(It: 3));
+        Each("ùÙ", new(It: 2, Fr: 1));
+
+        // Polish
+        Each("ąĄęĘ",       new(Pl: 5));
+        Each("śŚźŹżŻćĆńŃ", new(Pl: 3));
+
+        // Romanian
+        Each("ăĂ",   new(Ro: 5));
+        Each("șȘțȚ", new(Ro: 5)); // comma-below (correct form)
+        Each("ţŢ",   new(Ro: 4)); // cedilla-t (legacy Romanian)
+        Each("îÎ",   new(Ro: 2, Fr: 1));
+
+        // Swedish / Nordic
+        Each("åÅ",   new(Sv: 5));
+        Each("øØæÆ", new(Sv: 3)); // Norwegian / Danish
+
+        // Czech / Slovak
+        Each("ěĚ",      new(Cs: 5));
+        Each("řŘ",      new(Cs: 5));
+        Each("šŠčČžŽ", new(Cs: 2, Tr: 1)); // caron consonants
+        Each("ľĽŕŔĺĹ", new(Cs: 3));         // Slovak
+
+        // Turkish
+        Each("şŞ", new(Tr: 5));
+        Each("ğĞ", new(Tr: 5));
+        Set('ı',   new(Tr: 3)); // dotless i
+
+        // Hungarian
+        Each("őŐűŰ", new(Hu: 5)); // double acute — unique
+
+        return t.ToFrozenDictionary();
+    }
 }
