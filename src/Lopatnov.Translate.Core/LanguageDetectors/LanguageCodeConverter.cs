@@ -404,7 +404,6 @@ public static class LanguageCodeConverter
             ["npi"] = "npi_Deva",
             ["ell"] = "ell_Grek",
             ["el"] = "ell_Grek",
-            ["kor"] = "kor_Hang",
         };
 
     // FLORES-200 → ISO 639-1 (2-letter codes, e.g. "eng_Latn" → "en")

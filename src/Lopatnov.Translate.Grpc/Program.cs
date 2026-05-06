@@ -175,7 +175,7 @@ void RegisterFactory(Dictionary<string, Func<ITextTranslator>> factories, string
     if (c.Type.Equals(ModelType.Whisper, StringComparison.OrdinalIgnoreCase))
         return;
 
-    if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase))
+    if (c.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(c.Path))
     {
         factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
         {

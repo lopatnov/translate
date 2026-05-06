@@ -9,7 +9,7 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
 
     private static string ResolveModelPath()
     {
-        var envPath = Environment.GetEnvironmentVariable("Models__M2M100__Path");
+        var envPath = Environment.GetEnvironmentVariable("Models__m2m100_418M__Path");
         if (!string.IsNullOrEmpty(envPath))
             return envPath;
 

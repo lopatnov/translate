@@ -119,9 +119,21 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
 
         ISampleProvider provider = reader.ToSampleProvider();
 
-        // Downmix to mono if needed
-        if (reader.WaveFormat.Channels > 1)
+        // Downmix to mono if needed.
+        // StereoToMonoSampleProvider only accepts exactly 2-channel input,
+        // so multichannel (>2) audio is first routed through MultiplexingSampleProvider
+        // to extract the first two channels before the stereo→mono step.
+        if (reader.WaveFormat.Channels > 2)
+        {
+            var stereo = new MultiplexingSampleProvider(new[] { provider }, 2);
+            stereo.ConnectInputToOutput(0, 0);
+            stereo.ConnectInputToOutput(1, 1);
+            provider = new StereoToMonoSampleProvider(stereo);
+        }
+        else if (reader.WaveFormat.Channels == 2)
+        {
             provider = new StereoToMonoSampleProvider(provider);
+        }
 
         // Resample to 16 kHz if needed (WdlResamplingSampleProvider is pure managed / cross-platform)
         if (reader.WaveFormat.SampleRate != 16_000)
@@ -149,6 +161,11 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
         await _lock.WaitAsync(ct);
         try
         {
+            // Double-check after acquiring the lock: Dispose() sets _disposed=true
+            // before taking the lock, so this prevents using a factory that was
+            // disposed between our ObjectDisposedException check and this point.
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             if (_factory is null)
             {
                 _logger?.LogInformation(

@@ -186,8 +186,19 @@ public sealed class ModelSessionManager : IDisposable
 
             if (entry.TryAcquire())
             {
-                var translator = entry.Translator; // may block on first load
-                return new TranslatorLease(entry.Release, translator, key);
+                try
+                {
+                    var translator = entry.Translator; // may block on first load; Lazy caches exceptions
+                    return new TranslatorLease(entry.Release, translator, key);
+                }
+                catch
+                {
+                    // Model failed to load (file missing, ONNX error, OOM…).
+                    // Release the ref we just acquired so the entry does not
+                    // accumulate a growing ref-count on every subsequent Rent().
+                    entry.Release();
+                    throw;
+                }
             }
 
             // Entry was evicted between GetOrAdd and TryAcquire; remove and retry.
