@@ -80,7 +80,7 @@ The gRPC server runs on port `5100`. See [docs/api.md](docs/api.md) for the full
 
 ## Project Structure
 
-```
+```text
 src/
   Lopatnov.Translate.Grpc/           # gRPC server, DI wiring, model registry
   Lopatnov.Translate.Core/           # interfaces, language detection, JSON localization

@@ -8,6 +8,9 @@ services:
       - "5100:5100"
     volumes:
       - ../models:/app/models:ro
+      # Prerequisite: src/Lopatnov.Translate.Grpc/appsettings.json must exist on the host.
+      # If the file is missing, Docker will silently create a directory at that path and the
+      # container will fail to read its configuration.
       - ../src/Lopatnov.Translate.Grpc/appsettings.json:/app/src/Lopatnov.Translate.Grpc/appsettings.json:ro
     environment:
       - DOTNET_CLI_TELEMETRY_OPTOUT=1

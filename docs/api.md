@@ -30,7 +30,7 @@ All RPCs that accept or return language codes support a `language_format` field 
 | `"iso639-1"` | ISO 639-1 two-letter codes | `"uk"`, `"de"` |
 | `"iso639-2"` | ISO 639-2 three-letter codes (terminological form) | `"ukr"`, `"deu"` |
 | `"iso639-3"` | ISO 639-3 three-letter codes | `"ukr"`, `"deu"` |
-| `"native"` | No conversion — pass the code through unchanged. Default for `TranslateText` and `TranslateLocalization` when field is empty. | any string |
+| `"native"` | No conversion — pass the code through unchanged. | any string |
 
 Unknown or unrecognised codes are returned unchanged regardless of format.
 

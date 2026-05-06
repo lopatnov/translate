@@ -36,7 +36,7 @@ message DetectLanguageRequest {
 
 message DetectLanguageResponse {
   string language = 1;
-  float probability = 2;
+  float probability = 2; // Confidence score in [0, 1]. Returns 0.0 when the detector does not provide a score (e.g. heuristic detector).
 }
 
 message TranslateLocalizationRequest {

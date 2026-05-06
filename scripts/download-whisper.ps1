@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$dest = Join-Path $PSScriptRoot ".." "models" "audio-to-text" "whisper.cpp"
+$dest = [System.IO.Path]::Combine($PSScriptRoot, "..", "models", "audio-to-text", "whisper.cpp")
 $dest = [System.IO.Path]::GetFullPath($dest)
 $file = "ggml-$ModelSize.bin"
 $target = Join-Path $dest $file
