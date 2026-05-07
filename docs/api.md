@@ -253,13 +253,6 @@ grpcurl -plaintext \
 **PowerShell (Windows):**
 
 ```powershell
-echo "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"auto\"}" > request.json
-grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d @ localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio < request.json
-```
-
-or
-
-```powershell
 $audioBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("recording.wav"))
 $body = "{`"audio_data`": `"$audioBase64`", `"language`": `"auto`"}"
 grpcurl -plaintext `
@@ -276,6 +269,12 @@ grpcurl -plaintext \
   -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"uk\", \"language_format\": \"flores200\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 # → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"ukr_Cyrl", "fullText":"Привіт"}
+```
+
+**Git Bash (Windows):**
+
+```bash
+echo "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"auto\"}" | grpcurl -plaintext   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto   -d @   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 ```
 
 ---
