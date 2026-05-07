@@ -29,6 +29,12 @@ jobs:
       - name: Restore
         run: dotnet restore translate.slnx
 
+      - name: Check for vulnerable packages
+        shell: bash
+        run: |
+          dotnet list translate.slnx package --vulnerable --include-transitive 2>&1 | tee /tmp/vuln.txt
+          ! grep -q "has the following vulnerable packages" /tmp/vuln.txt
+
       - name: Build
         run: dotnet build translate.slnx -c Release --no-restore
 
@@ -107,7 +113,10 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.opencover.reportsPaths="test-results/**/coverage.opencover.xml" \
-            /d:sonar.qualitygate.wait=false
+            /d:sonar.qualitygate.wait=false \
+            /d:sonar.python.version=3 \
+            /d:sonar.exclusions="**/node_modules/**,models/**" \
+            /d:sonar.coverage.exclusions="**/Program.cs,**/ModelBootstrap.cs,**/NullSpeechRecognizer.cs,**/WhisperRecognizer.cs"
           dotnet build translate.slnx -c Release --no-restore
           dotnet test translate.slnx \
             --configuration Release \
@@ -117,6 +126,43 @@ jobs:
             --settings coverlet.runsettings \
             --collect:"XPlat Code Coverage"
           ${{ runner.temp }}/scanner/dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+  hadolint:
+    name: Lint Dockerfile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: warning
+
+  trivy:
+    name: Trivy (dependencies)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Scan filesystem for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: library
+          severity: CRITICAL,HIGH
 
   proto-lint:
     name: Proto Lint & Breaking

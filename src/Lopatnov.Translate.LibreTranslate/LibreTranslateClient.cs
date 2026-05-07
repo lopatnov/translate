@@ -36,7 +36,8 @@ public sealed class LibreTranslateClient : ITextTranslator
     }
 
     // LibreTranslate expects ISO 639-1 codes (e.g. "en"), not FLORES-200 (e.g. "eng_Latn").
-    // Unknown codes pass through unchanged so callers using native ISO codes still work.
+    // Unknown codes (including "auto") pass through unchanged — LibreTranslate accepts "auto"
+    // natively as source language, triggering its own server-side language detection.
     internal static string ToIso(string flores) =>
         FloresIsoCodes.TryGetValue(flores, out var iso) ? iso : flores;
 

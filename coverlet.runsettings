@@ -5,7 +5,12 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>opencover</Format>
-          <ExcludeByFile>**/Program.cs</ExcludeByFile>
+          <ExcludeByFile>
+            **/Program.cs,
+            **/ModelBootstrap.cs,
+            **/NullSpeechRecognizer.cs,
+            **/WhisperRecognizer.cs
+          </ExcludeByFile>
         </Configuration>
       </DataCollector>
     </DataCollectors>
