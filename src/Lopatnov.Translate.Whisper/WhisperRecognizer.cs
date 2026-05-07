@@ -35,13 +35,13 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
         ILogger<WhisperRecognizer>? logger = null)
     {
         _options = options.Value;
-        _ttl     = TimeSpan.FromMinutes(_options.TtlMinutes > 0 ? _options.TtlMinutes : 30);
-        _logger  = logger;
+        _ttl = TimeSpan.FromMinutes(_options.TtlMinutes > 0 ? _options.TtlMinutes : 30);
+        _logger = logger;
 
         // Check eviction once per minute; actual eviction only after _ttl of inactivity.
         _evictionTimer = new Timer(EvictIfIdle, null,
             dueTime: TimeSpan.FromMinutes(1),
-            period:  TimeSpan.FromMinutes(1));
+            period: TimeSpan.FromMinutes(1));
     }
 
     // -------------------------------------------------------------------------
@@ -76,10 +76,14 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
             {
                 builderCfg = builderCfg.WithLanguage(language);
             }
+            else if (language.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            {
+                builderCfg = builderCfg.WithLanguageDetection();
+            }
 
             using var processor = builderCfg.Build();
 
-            var segments        = new List<TranscriptionSegment>();
+            var segments = new List<TranscriptionSegment>();
             string? detectedLang = null;
 
             await foreach (var seg in processor.ProcessAsync(samples, cancellationToken))
@@ -114,7 +118,7 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
     /// </summary>
     internal static float[] ResampleToWhisperFormat(byte[] audioData)
     {
-        using var ms     = new MemoryStream(audioData);
+        using var ms = new MemoryStream(audioData);
         using var reader = new WaveFileReader(ms);
 
         ISampleProvider provider = reader.ToSampleProvider();
