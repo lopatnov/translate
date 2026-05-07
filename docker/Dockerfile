@@ -12,13 +12,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app/src/Lopatnov.Translate.Grpc
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    git \
-    build-essential \
-    cmake \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp && \
+    libgomp1=14.2.0-4ubuntu2~24.04.1 \
+    git=1:2.43.0-1ubuntu7.3 \
+    build-essential=12.10ubuntu1 \
+    cmake=3.28.3-1build7 \
+    && rm -rf /var/lib/apt/lists/* && \
+    git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp && \
     cd /tmp/whisper.cpp && \
     cmake -B build && \
     cmake --build build --config Release && \
