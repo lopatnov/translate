@@ -23,14 +23,14 @@ Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](../src/Lopa
 
 All RPCs that accept or return language codes support a `language_format` field on the request.
 
-| Value | Description | Example |
-|---|---|---|
-| `"bcp47"` | BCP-47 tags. Default when field is empty or omitted. | `"uk"`, `"zh-Hans"` |
+| Value         | Description                                          | Example                    |
+| ------------- | ---------------------------------------------------- | -------------------------- |
+| `"bcp47"`     | BCP-47 tags. Default when field is empty or omitted. | `"uk"`, `"zh-Hans"`        |
 | `"flores200"` | FLORES-200 codes used internally by NLLB and M2M-100 | `"ukr_Cyrl"`, `"zho_Hans"` |
-| `"iso639-1"` | ISO 639-1 two-letter codes | `"uk"`, `"de"` |
-| `"iso639-2"` | ISO 639-2 three-letter codes (terminological form) | `"ukr"`, `"deu"` |
-| `"iso639-3"` | ISO 639-3 three-letter codes | `"ukr"`, `"deu"` |
-| `"native"` | No conversion — pass the code through unchanged. | any string |
+| `"iso639-1"`  | ISO 639-1 two-letter codes                           | `"uk"`, `"de"`             |
+| `"iso639-2"`  | ISO 639-2 three-letter codes (terminological form)   | `"ukr"`, `"deu"`           |
+| `"iso639-3"`  | ISO 639-3 three-letter codes                         | `"ukr"`, `"deu"`           |
+| `"native"`    | No conversion — pass the code through unchanged.     | any string                 |
 
 Unknown or unrecognised codes are returned unchanged regardless of format.
 
@@ -38,13 +38,13 @@ Unknown or unrecognised codes are returned unchanged regardless of format.
 
 ## RPCs
 
-| RPC | Description |
-|---|---|
-| `TranslateText` | Translate a text string |
-| `TranslateLocalization` | Translate all strings in a JSON i18n file |
-| `DetectLanguage` | Detect the language of a text string |
-| `TranscribeAudio` | Transcribe speech from a WAV file |
-| `GetCapabilities` | List available models and service capabilities |
+| RPC                     | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `TranslateText`         | Translate a text string                        |
+| `TranslateLocalization` | Translate all strings in a JSON i18n file      |
+| `DetectLanguage`        | Detect the language of a text string           |
+| `TranscribeAudio`       | Transcribe speech from a WAV file              |
+| `GetCapabilities`       | List available models and service capabilities |
 
 ---
 
@@ -253,6 +253,13 @@ grpcurl -plaintext \
 **PowerShell (Windows):**
 
 ```powershell
+echo "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"auto\"}" > request.json
+grpcurl -plaintext -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto -d @ localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio < request.json
+```
+
+or
+
+```powershell
 $audioBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("recording.wav"))
 $body = "{`"audio_data`": `"$audioBase64`", `"language`": `"auto`"}"
 grpcurl -plaintext `
@@ -296,10 +303,10 @@ grpcurl -plaintext \
 
 ## Error codes
 
-| Scenario | gRPC Status |
-|---|---|
-| Unknown `model` key | `INVALID_ARGUMENT` |
-| `model` not in `AllowedModels` | `PERMISSION_DENIED` |
+| Scenario                                                      | gRPC Status           |
+| ------------------------------------------------------------- | --------------------- |
+| Unknown `model` key                                           | `INVALID_ARGUMENT`    |
+| `model` not in `AllowedModels`                                | `PERMISSION_DENIED`   |
 | `TranscribeAudio` called when `AudioToText` is not configured | `FAILED_PRECONDITION` |
-| Invalid JSON in `TranslateLocalization` | `INVALID_ARGUMENT` |
-| Model file missing at configured path | `INTERNAL` |
+| Invalid JSON in `TranslateLocalization`                       | `INVALID_ARGUMENT`    |
+| Model file missing at configured path                         | `INTERNAL`            |

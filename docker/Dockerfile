@@ -11,6 +11,20 @@ RUN dotnet publish src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app/src/Lopatnov.Translate.Grpc
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    git \
+    build-essential \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp && \
+    cd /tmp/whisper.cpp && \
+    cmake -B build && \
+    cmake --build build --config Release && \
+    cmake --install build && \
+    rm -rf /tmp/whisper.cpp
+
 COPY --from=build /app/publish .
 
 RUN useradd --system --no-create-home --shell /sbin/nologin appuser \

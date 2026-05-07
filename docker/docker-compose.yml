@@ -15,6 +15,11 @@ services:
     environment:
       - DOTNET_CLI_TELEMETRY_OPTOUT=1
       - DOTNET_NOLOGO=1
+      # Workaround: ggml's library constructor installs a signal handler that conflicts with
+      # the .NET 10 CLR's signal interception on Linux. Pre-loading the library via LD_PRELOAD
+      # runs the constructor before the CLR starts, so the second dlopen (from WhisperFactory)
+      # finds the library already loaded and skips the constructor entirely.
+      - LD_PRELOAD=/app/src/Lopatnov.Translate.Grpc/runtimes/linux-x64/libggml-base-whisper.so
     # depends_on:
     #   libretranslate:
     #     condition: service_healthy
