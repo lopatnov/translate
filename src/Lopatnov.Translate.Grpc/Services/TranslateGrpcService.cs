@@ -44,10 +44,10 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
         else
         {
-            sourceLanguage = LanguageCodeConverter.Convert(sourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+            sourceLanguage = ConvertLanguageCode(sourceLanguage, langFormat, LanguageCodeFormat.Flores200);
         }
 
-        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
+        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         var translated = await lease.Translator.TranslateAsync(
             request.Text,
@@ -56,7 +56,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             context.CancellationToken);
 
         var detectedInFormat = detectedFlores != null
-            ? LanguageCodeConverter.Convert(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
+            ? ConvertLanguageCode(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
             : string.Empty;
 
         return new TranslateTextResponse
@@ -86,8 +86,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         using var lease = ResolveTranslator(request.Model);
 
         var langFormat = ResolveLanguageFormat(request.LanguageFormat);
-        var sourceLanguage = LanguageCodeConverter.Convert(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
-        var targetLanguage = LanguageCodeConverter.Convert(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
+        var sourceLanguage = ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         try
         {
@@ -113,8 +113,11 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         var detection = _detector.Value.Detect(request.Text);
         var langFormat = ResolveLanguageFormat(request.LanguageFormat);
-        var language = detection.ToFormat(langFormat);
-        return Task.FromResult(new DetectLanguageResponse { Language = language });
+        return Task.FromResult(new DetectLanguageResponse
+        {
+            Language    = detection.ToFormat(langFormat),
+            Probability = detection.Probability ?? 0f,
+        });
     }
 
     public override async Task<TranscribeAudioResponse> TranscribeAudio(
@@ -126,7 +129,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         var inputLanguage = string.IsNullOrWhiteSpace(request.Language) ||
                             request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase)
             ? "auto"
-            : LanguageCodeConverter.Convert(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+            : ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
 
         Core.Models.TranscriptionResult result;
         try
@@ -142,7 +145,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
 
         var detectedInFormat = !string.IsNullOrEmpty(result.DetectedLanguage)
-            ? LanguageCodeConverter.Convert(result.DetectedLanguage, LanguageCodeFormat.Bcp47, langFormat)
+            ? ConvertLanguageCode(result.DetectedLanguage, LanguageCodeFormat.Bcp47, langFormat)
             : string.Empty;
 
         var response = new TranscribeAudioResponse
@@ -195,6 +198,22 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         try
         {
             return (raw ?? string.Empty).ToLanguageCodeFormat();
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Converts a language code between formats, mapping <see cref="ArgumentException"/> to
+    /// <see cref="StatusCode.InvalidArgument"/> so callers receive a well-formed gRPC error.
+    /// </summary>
+    private static string ConvertLanguageCode(string code, LanguageCodeFormat from, LanguageCodeFormat to)
+    {
+        try
+        {
+            return LanguageCodeConverter.Convert(code, from, to);
         }
         catch (ArgumentException ex)
         {

@@ -77,11 +77,18 @@ internal static class ModelBootstrap
         IReadOnlyDictionary<string, ModelConfig> rawModels,
         Func<string, string> resolvePath)
     {
-        if (string.IsNullOrWhiteSpace(audioToText) ||
-            !rawModels.TryGetValue(audioToText, out var wCfg))
+        if (string.IsNullOrWhiteSpace(audioToText))
         {
             sp.GetRequiredService<ILogger<Program>>()
               .LogInformation("Translation:AudioToText is empty — STT disabled (NullSpeechRecognizer)");
+            return new NullSpeechRecognizer();
+        }
+
+        if (!rawModels.TryGetValue(audioToText, out var wCfg))
+        {
+            sp.GetRequiredService<ILogger<Program>>()
+              .LogError("Translation:AudioToText references unknown model '{Name}' — STT disabled (NullSpeechRecognizer)",
+                  audioToText);
             return new NullSpeechRecognizer();
         }
 

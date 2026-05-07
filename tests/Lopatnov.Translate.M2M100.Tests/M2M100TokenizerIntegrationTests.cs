@@ -32,7 +32,8 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     [InlineData("ru",       128077L)]
     public void GetLanguageTokenId_MatchesAddedTokensJson(string code, long expectedId)
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'.");
+        var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
+        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
@@ -42,24 +43,27 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     [SkippableFact]
     public void Encode_StartsWithSourceLangTokenAndEndsWithEos()
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'.");
+        var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
+        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
         var ids = tokenizer.Encode("Hello world", "eng_Latn");
+
+        Assert.True(ids.Length >= 3, $"Expected at least 3 tokens, got {ids.Length}");
 
         output.WriteLine($"Encoded IDs: [{string.Join(", ", ids)}]");
         output.WriteLine($"Content range: [{ids[1..^1].Min()}, {ids[1..^1].Max()}]");
 
         Assert.Equal(128022L, ids[0]);
         Assert.Equal(M2M100Tokenizer.EosTokenId, ids[^1]);
-        Assert.True(ids.Length >= 3, $"Expected at least 3 tokens, got {ids.Length}");
     }
 
     [SkippableFact]
     public void ContentTokenIds_AreInBpeRange()
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'.");
+        var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
+        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
@@ -76,7 +80,8 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     [SkippableFact]
     public void Decode_Encode_RoundTrip()
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'.");
+        var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
+        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
         const string original = "Hello, how are you?";
@@ -100,7 +105,8 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     [SkippableFact]
     public void ContentTokenIds_MapToSensiblePiecesInVocab()
     {
-        Skip.If(!Directory.Exists(ModelPath), $"M2M-100 model not found at '{ModelPath}'.");
+        var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
+        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         var vocabPath = Path.Combine(ModelPath, "vocab.json");
         Skip.If(!File.Exists(vocabPath), "vocab.json not found — cannot verify offset.");

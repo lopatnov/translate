@@ -102,7 +102,7 @@ Controls routing and lifecycle of loaded models.
 | `AutoDetect` | `""` | Name of a `FastText` model used for language auto-detection. Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty or the model file is missing, falls back to heuristic detection. |
 | `AudioToText` | `""` | Name of a `Whisper` model entry used for speech-to-text transcription (`TranscribeAudio` RPC). If empty, the RPC returns `FAILED_PRECONDITION`. |
 | `AllowedModels` | `[]` | Restricts which translation models clients may request by name. Empty list means all configured translation models are accessible. `Whisper` and `FastText` entries are not affected by this list. |
-| `ModelTtlMinutes` | `30` | All model types are kept in memory for this many minutes after last use, then unloaded to free resources. |
+| `ModelTtlMinutes` | `30` | Translation models and the Whisper STT model are kept in memory for this many minutes after last use, then unloaded to free resources. The auto-detect language detector (`Translation:AutoDetect`) is loaded once at startup and is not affected by this TTL. |
 
 ---
 

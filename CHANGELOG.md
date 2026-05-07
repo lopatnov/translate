@@ -38,7 +38,7 @@ All notable changes to Lopatnov.Translate are documented here.
 
 - Docker Compose setup with LibreTranslate as an optional sidecar service
 - Multi-stage Dockerfile (SDK build → ASP.NET runtime)
-- GitHub Actions CI: build, unit tests, SonarCloud, buf lint/breaking, Trivy, Snyk, CodeQL
+- GitHub Actions CI: build, unit tests, SonarCloud, hadolint, buf lint/breaking, and Trivy
 - Docker image published to GitHub Container Registry (`ghcr.io/lopatnov/translate`)
 - Dependabot configured for NuGet, GitHub Actions, and Docker
 - MCP server client in `clients/translate-mcp/` — integrates the service as an AI tool
@@ -51,6 +51,6 @@ Language detection: 22 languages built-in; 176 or 1633 with optional FastText mo
 
 ### Notes
 
-- Model weights are **not included** — download via `scripts/` scripts or `huggingface-cli`
+- Model weights are **not included** — download them with `huggingface-cli` (see `docs/models.md`)
 - NLLB-200 is licensed CC BY-NC 4.0 (non-commercial use only); M2M-100 and Whisper are MIT
 - Text-to-speech (Piper) is planned for phase 3

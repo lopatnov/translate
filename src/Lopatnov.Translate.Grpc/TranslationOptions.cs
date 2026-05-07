@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Lopatnov.Translate.Grpc;
 
 public sealed class TranslationOptions
@@ -6,6 +8,7 @@ public sealed class TranslationOptions
     public string[] AllowedModels { get; set; } = [];
 
     /// <summary>Minutes a loaded model stays in memory after its last use before being evicted.</summary>
+    [Range(1, int.MaxValue)]
     public int ModelTtlMinutes { get; set; } = 30;
 
     /// <summary>Name of the language-detection model entry in Models. Empty = heuristic fallback.</summary>

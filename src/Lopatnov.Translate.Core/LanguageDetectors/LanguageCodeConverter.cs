@@ -18,6 +18,7 @@ public static class LanguageCodeConverter
     {
         if (string.IsNullOrEmpty(code)
             || fromFormat == toFormat
+            || fromFormat == LanguageCodeFormat.Native
             || toFormat == LanguageCodeFormat.Native
             || toFormat == LanguageCodeFormat.None)
             return code;
