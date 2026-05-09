@@ -11,14 +11,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
-    <PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.76.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.80.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Lopatnov.Translate.Core\Lopatnov.Translate.Core.csproj" />
+    <ProjectReference Include="..\Lopatnov.Translate.M2M100\Lopatnov.Translate.M2M100.csproj" />
     <ProjectReference Include="..\Lopatnov.Translate.Nllb\Lopatnov.Translate.Nllb.csproj" />
     <ProjectReference Include="..\Lopatnov.Translate.LibreTranslate\Lopatnov.Translate.LibreTranslate.csproj" />
+    <ProjectReference Include="..\Lopatnov.Translate.Whisper\Lopatnov.Translate.Whisper.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,6 +7,7 @@ option csharp_namespace = "Lopatnov.Translate.Grpc";
 service TranslateService {
   rpc TranslateText (TranslateTextRequest) returns (TranslateTextResponse);
   rpc TranslateLocalization (TranslateLocalizationRequest) returns (TranslateLocalizationResponse);
+  rpc DetectLanguage (DetectLanguageRequest) returns (DetectLanguageResponse);
   rpc TranscribeAudio (TranscribeAudioRequest) returns (TranscribeAudioResponse);
   rpc SynthesizeSpeech (SynthesizeSpeechRequest) returns (SynthesizeSpeechResponse);
   rpc TranslateAudio (TranslateAudioRequest) returns (TranslateAudioResponse);
@@ -17,23 +18,35 @@ message TranslateTextRequest {
   string text = 1;
   string source_language = 2;
   string target_language = 3;
-  string provider = 4;
-  string context = 5;  // optional: free-form hint for the translation (reserved for LLM-based providers)
+  string model = 4;           // name of the model entry from config (e.g. "nllb"); empty = default model
+  string context = 5;         // optional: free-form hint for the translation (reserved for LLM-based models)
+  string language_format = 6; // format for source_language/target_language/detected_language: "bcp47" (default), "flores200", "native"
 }
 
 message TranslateTextResponse {
   string translated_text = 1;
   string detected_language = 2;
-  string provider_used = 3;
+  string model_used = 3;
+}
+
+message DetectLanguageRequest {
+  string text = 1;
+  string language_format = 2; // format for the returned language code: "bcp47" (default), "flores200", "native"
+}
+
+message DetectLanguageResponse {
+  string language = 1;
+  float probability = 2; // Confidence score in [0, 1]. Returns 0.0 when the detector does not provide a score (e.g. heuristic detector).
 }
 
 message TranslateLocalizationRequest {
   string json = 1;
   string source_language = 2;
   string target_language = 3;
-  string provider = 4;
+  string model = 4;                 // name of the model entry from config; empty = default model
   string existing_translation = 5;  // optional: same-structure JSON with already-translated values; matching keys are reused as-is
-  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based providers)
+  string context = 6;               // optional: same-structure JSON with context hints per key (used by LLM-based models)
+  string language_format = 7;       // format for source_language/target_language: "bcp47" (default), "flores200", "native"
 }
 
 message TranslateLocalizationResponse {
@@ -45,6 +58,7 @@ message TranscribeAudioRequest {
   bytes audio_data = 1;
   string language = 2;
   string audio_format = 3;
+  string language_format = 4; // format for language/detected_language: "bcp47" (default), "flores200", "native"
 }
 
 message TranscribeAudioResponse {
@@ -64,6 +78,7 @@ message SynthesizeSpeechRequest {
   string language = 2;
   string voice = 3;
   float speed = 4;
+  string language_format = 5; // format for language: "bcp47" (default), "flores200", "native"
 }
 
 message SynthesizeSpeechResponse {
@@ -77,6 +92,7 @@ message TranslateAudioRequest {
   string target_language = 3;
   string audio_format = 4;
   string target_voice = 5;
+  string language_format = 6; // format for source_language/target_language: "bcp47" (default), "flores200", "native"
 }
 
 message TranslateAudioResponse {
@@ -89,9 +105,10 @@ message TranslateAudioResponse {
 message GetCapabilitiesRequest {}
 
 message GetCapabilitiesResponse {
-  repeated string supported_languages = 1;
+  reserved 1;
+  reserved "supported_languages";
   repeated string available_voices = 2;
-  repeated string available_providers = 3;
+  repeated string available_models = 3;
   bool stt_available = 4;
   bool tts_available = 5;
 }

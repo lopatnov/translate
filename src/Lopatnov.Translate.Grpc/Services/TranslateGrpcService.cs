@@ -1,33 +1,69 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core;
 using Lopatnov.Translate.Core.Abstractions;
+using Lopatnov.Translate.Core.LanguageDetectors;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace Lopatnov.Translate.Grpc.Services;
 
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
-    private const string DefaultProvider = "nllb";
-    private readonly IServiceProvider _services;
+    private readonly ModelSessionManager _manager;
+    private readonly Lazy<ILanguageDetector> _detector;
+    private readonly ISpeechRecognizer _recognizer;
+    private readonly TranslationOptions _translationOptions;
 
-    public TranslateGrpcService(IServiceProvider services)
-        => _services = services;
+    public TranslateGrpcService(
+        ModelSessionManager manager,
+        Lazy<ILanguageDetector> detector,
+        ISpeechRecognizer recognizer,
+        IOptions<TranslationOptions> translationOptions)
+    {
+        _manager = manager;
+        _detector = detector;
+        _recognizer = recognizer;
+        _translationOptions = translationOptions.Value;
+    }
 
     public override async Task<TranslateTextResponse> TranslateText(
         TranslateTextRequest request, ServerCallContext context)
     {
-        var (translator, providerKey) = ResolveTranslator(request.Provider);
+        using var lease = ResolveTranslator(request.Model);
 
-        var translated = await translator.TranslateAsync(
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        var sourceLanguage = request.SourceLanguage;
+        string? detectedFlores = null;
+
+        if (string.IsNullOrWhiteSpace(sourceLanguage) ||
+            sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            var detection = _detector.Value.Detect(request.Text);
+            detectedFlores = detection.Flores200;
+            sourceLanguage = detectedFlores;
+        }
+        else
+        {
+            sourceLanguage = ConvertLanguageCode(sourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        }
+
+        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
+
+        var translated = await lease.Translator.TranslateAsync(
             request.Text,
-            request.SourceLanguage,
-            request.TargetLanguage,
+            sourceLanguage,
+            targetLanguage,
             context.CancellationToken);
+
+        var detectedInFormat = detectedFlores != null
+            ? ConvertLanguageCode(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
+            : string.Empty;
 
         return new TranslateTextResponse
         {
             TranslatedText = translated,
-            ProviderUsed = providerKey,
+            DetectedLanguage = detectedInFormat,
+            ModelUsed = lease.Key,
         };
     }
 
@@ -36,30 +72,30 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         var response = new GetCapabilitiesResponse
         {
-            SttAvailable = false,
+            // SttAvailable reflects whether a Whisper model is configured (not NullSpeechRecognizer).
+            SttAvailable = !string.IsNullOrEmpty(_translationOptions.AudioToText),
             TtsAvailable = false,
         };
-        response.AvailableProviders.AddRange(["nllb", "libretranslate"]);
-        response.SupportedLanguages.AddRange([
-            Language.EnglishLatin,    Language.UkrainianCyrillic, Language.RussianCyrillic, Language.GermanLatin,
-            Language.FrenchLatin,     Language.SpanishLatin,      Language.PolishLatin,      Language.ChineseSimplified,
-            Language.JapaneseJpan,   Language.ArabicArab,
-        ]);
+        response.AvailableModels.AddRange(_manager.GetAvailableModels());
         return Task.FromResult(response);
     }
 
     public override async Task<TranslateLocalizationResponse> TranslateLocalization(
         TranslateLocalizationRequest request, ServerCallContext context)
     {
-        var (translator, _) = ResolveTranslator(request.Provider);
+        using var lease = ResolveTranslator(request.Model);
+
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        var sourceLanguage = ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         try
         {
             var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
                 request.Json,
-                translator,
-                request.SourceLanguage,
-                request.TargetLanguage,
+                lease.Translator,
+                sourceLanguage,
+                targetLanguage,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
                 string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
                 context.CancellationToken);
@@ -72,9 +108,59 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
     }
 
-    public override Task<TranscribeAudioResponse> TranscribeAudio(
+    public override Task<DetectLanguageResponse> DetectLanguage(
+        DetectLanguageRequest request, ServerCallContext context)
+    {
+        var detection = _detector.Value.Detect(request.Text);
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        return Task.FromResult(new DetectLanguageResponse
+        {
+            Language    = detection.ToFormat(langFormat),
+            Probability = detection.Probability ?? 0f,
+        });
+    }
+
+    public override async Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
-        => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 2"));
+    {
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+
+        // Whisper uses BCP-47 language codes natively (e.g. "en", "ru", "de").
+        var inputLanguage = string.IsNullOrWhiteSpace(request.Language) ||
+                            request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? "auto"
+            : ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+
+        Core.Models.TranscriptionResult result;
+        try
+        {
+            result = await _recognizer.TranscribeAsync(
+                request.AudioData.ToByteArray(),
+                inputLanguage,
+                context.CancellationToken);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+
+        var detectedInFormat = !string.IsNullOrEmpty(result.DetectedLanguage)
+            ? ConvertLanguageCode(result.DetectedLanguage, LanguageCodeFormat.Bcp47, langFormat)
+            : string.Empty;
+
+        var response = new TranscribeAudioResponse
+        {
+            DetectedLanguage = detectedInFormat,
+            FullText         = result.FullText,
+        };
+        response.Segments.AddRange(result.Segments.Select(s => new TranscriptionSegment
+        {
+            Text      = s.Text,
+            StartTime = s.StartTime,
+            EndTime   = s.EndTime,
+        }));
+        return response;
+    }
 
     public override Task<SynthesizeSpeechResponse> SynthesizeSpeech(
         SynthesizeSpeechRequest request, ServerCallContext context)
@@ -84,11 +170,54 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         TranslateAudioRequest request, ServerCallContext context)
         => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 4"));
 
-    private (ITextTranslator Translator, string ProviderKey) ResolveTranslator(string? provider)
+    private ModelSessionManager.TranslatorLease ResolveTranslator(string? provider)
     {
-        var providerKey = string.IsNullOrWhiteSpace(provider) ? DefaultProvider : provider.Trim();
-        var translator = _services.GetKeyedService<ITextTranslator>(providerKey)
-            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{providerKey}'"));
-        return (translator, providerKey);
+        var key = string.IsNullOrWhiteSpace(provider) ? _translationOptions.DefaultModel : provider.Trim();
+        try
+        {
+            return _manager.Rent(key);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown provider: '{key}'"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
+        }
+    }
+
+    /// <summary>
+    /// Converts a raw language_format string from the request to <see cref="LanguageCodeFormat"/>.
+    /// Returns <see cref="LanguageCodeFormat.Bcp47"/> when the field is empty.
+    /// Throws <see cref="RpcException"/> with <see cref="StatusCode.InvalidArgument"/> for unknown values
+    /// so the caller gets a well-formed gRPC error instead of an unhandled server exception.
+    /// </summary>
+    private static LanguageCodeFormat ResolveLanguageFormat(string? raw)
+    {
+        try
+        {
+            return (raw ?? string.Empty).ToLanguageCodeFormat();
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Converts a language code between formats, mapping <see cref="ArgumentException"/> to
+    /// <see cref="StatusCode.InvalidArgument"/> so callers receive a well-formed gRPC error.
+    /// </summary>
+    private static string ConvertLanguageCode(string code, LanguageCodeFormat from, LanguageCodeFormat to)
+    {
+        try
+        {
+            return LanguageCodeConverter.Convert(code, from, to);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
     }
 }

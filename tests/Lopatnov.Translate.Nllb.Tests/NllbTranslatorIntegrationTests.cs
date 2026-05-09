@@ -10,8 +10,8 @@ public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
     private static string ResolveModelPath()
     {
         // Production resolves NllbOptions.Path relative to the app's content root.
-        // Tests run from bin/Release/net10.0/, so we traverse up to find the solution
-        // root (translate.slnx) and mirror the production default of "models/nllb".
+        // Tests run from bin/Debug/net10.0/, so we traverse up to find the solution
+        // root (translate.slnx) and mirror the production default.
         var envPath = Environment.GetEnvironmentVariable("Models__Nllb__Path");
         if (!string.IsNullOrEmpty(envPath))
             return envPath;
@@ -20,10 +20,10 @@ public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
         while (dir != null)
         {
             if (File.Exists(Path.Combine(dir.FullName, "translate.slnx")))
-                return Path.Combine(dir.FullName, "models", "nllb");
+                return Path.Combine(dir.FullName, "models", "translate", "nllb-200-distilled-600M");
             dir = dir.Parent;
         }
-        return Path.Combine("models", "nllb");
+        return Path.Combine("models", "translate", "nllb-200-distilled-600M");
     }
 
     // source, srcLang, tgtLang, expected keywords (any one must appear, case-insensitive)
