@@ -1,8 +1,5 @@
 title: Lopatnov.Translate
-description: >-
-  Self-hosted gRPC service for speech-to-text, text translation, and language detection.
-  Runs entirely offline — no cloud, no API keys. Powered by Whisper, NLLB-200, and M2M-100
-  via ONNX Runtime on .NET 10. Deploy with a single Docker Compose command.
+description: "Add @lopatnov/translate-mcp to your AI and translate text, localization files, and audio — fully offline, no API keys"
 show_downloads: true
 google_analytics: G-418L1E1H1L
 theme: jekyll-theme-cayman
