@@ -1,6 +1,8 @@
 title: Lopatnov.Translate
-description: Self-hosted Whisper → NLLB-200 → Piper cascade over gRPC.
-  Speech and text translation powered by ONNX Runtime on .NET 10.
+description: >-
+  Self-hosted gRPC service for speech-to-text, text translation, and language detection.
+  Runs entirely offline — no cloud, no API keys. Powered by Whisper, NLLB-200, and M2M-100
+  via ONNX Runtime on .NET 10. Deploy with a single Docker Compose command.
 show_downloads: true
-google_analytics:
+google_analytics: G-418L1E1H1L
 theme: jekyll-theme-cayman
