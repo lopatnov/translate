@@ -1,0 +1,6 @@
+[submodule "clients/translate-angular"]
+	path = clients/translate-angular
+	url = https://github.com/lopatnov/translate-angular.git
+[submodule "clients/translate-mcp"]
+	path = clients/translate-mcp
+	url = https://github.com/lopatnov/translate-mcp.git
