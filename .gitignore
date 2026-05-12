@@ -58,5 +58,6 @@ nunit-*.xml
 /CLAUDE.md
 /.claude
 /.vs
+/.playwright-mcp
 /src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj.user
 /draft
