@@ -109,6 +109,11 @@ builder.Services.AddSingleton<ISpeechSynthesizer>(sp =>
 builder.Services.AddSingleton<ModelSessionManager>(sp =>
     ModelBootstrap.BuildSessionManager(sp, rawModels, ResolvePath));
 
+// --- Model warm-up at startup ---
+builder.Services.AddOptions<WarmUpOptions>()
+    .Bind(builder.Configuration.GetSection("WarmUp"));
+builder.Services.AddHostedService<WarmUpHostedService>();
+
 var app = builder.Build();
 
 app.MapGrpcService<TranslateGrpcService>();
