@@ -4,6 +4,7 @@ using Lopatnov.Translate.Grpc.Services;
 using Lopatnov.Translate.LibreTranslate;
 using Lopatnov.Translate.M2M100;
 using Lopatnov.Translate.Nllb;
+using Lopatnov.Translate.Piper;
 using Lopatnov.Translate.Whisper;
 using Microsoft.Extensions.Options;
 
@@ -110,6 +111,70 @@ internal static class ModelBootstrap
             log);
     }
 
+    internal static ISpeechSynthesizer CreateSpeechSynthesizer(
+        IServiceProvider sp,
+        IReadOnlyDictionary<string, string> textToAudio,
+        IReadOnlyDictionary<string, ModelConfig> rawModels,
+        Func<string, string> resolvePath)
+    {
+        if (textToAudio.Count == 0)
+        {
+            sp.GetRequiredService<ILogger<Program>>()
+              .LogInformation("Translation:TextToAudio is empty — TTS disabled (NullSpeechSynthesizer)");
+            return new NullSpeechSynthesizer();
+        }
+
+        var translOpts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
+        var log = sp.GetRequiredService<ILogger<PiperSynthesizer>>();
+
+        var voices = new Dictionary<string, PiperSynthesizer>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (lang, modelKey) in textToAudio)
+        {
+            if (!rawModels.TryGetValue(modelKey, out var pCfg))
+            {
+                log.LogError(
+                    "Translation:TextToAudio[{Lang}] references unknown model '{Key}' — skipping",
+                    lang, modelKey);
+                continue;
+            }
+
+            if (!pCfg.Type.Equals(ModelType.Piper, StringComparison.OrdinalIgnoreCase))
+            {
+                log.LogError(
+                    "Translation:TextToAudio[{Lang}] model '{Key}' must have Type=Piper " +
+                    "(found '{Type}') — skipping",
+                    lang, modelKey, pCfg.Type);
+                continue;
+            }
+
+            var modelPath = resolvePath(pCfg.Path);
+
+#pragma warning disable CA1873
+            log.LogInformation(
+                "Registering Piper TTS voice for '{Lang}' (model '{Key}') — will load lazily from {Path}",
+                lang, modelKey, modelPath);
+#pragma warning restore CA1873
+
+            voices[lang] = new PiperSynthesizer(
+                Options.Create(new PiperOptions
+                {
+                    ModelPath  = modelPath,
+                    TtlMinutes = translOpts.ModelTtlMinutes,
+                }),
+                log);
+        }
+
+        if (voices.Count == 0)
+        {
+            log.LogWarning(
+                "No valid Piper voice entries found in Translation:TextToAudio — TTS disabled");
+            return new NullSpeechSynthesizer();
+        }
+
+        return new MultiVoiceSynthesizer(voices);
+    }
+
     internal static ModelSessionManager BuildSessionManager(
         IServiceProvider sp,
         IReadOnlyDictionary<string, ModelConfig> rawModels,
@@ -128,9 +193,10 @@ internal static class ModelBootstrap
         string name, ModelConfig cfg, IServiceProvider sp,
         Func<string, string> resolvePath)
     {
-        // Whisper and FastText are not ITextTranslator — registered elsewhere.
+        // Whisper, FastText, and Piper are not ITextTranslator — registered elsewhere.
         if (cfg.Type.Equals(ModelType.Whisper,  StringComparison.OrdinalIgnoreCase) ||
-            cfg.Type.Equals(ModelType.FastText, StringComparison.OrdinalIgnoreCase))
+            cfg.Type.Equals(ModelType.FastText, StringComparison.OrdinalIgnoreCase) ||
+            cfg.Type.Equals(ModelType.Piper,    StringComparison.OrdinalIgnoreCase))
             return;
 
         if (cfg.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase)

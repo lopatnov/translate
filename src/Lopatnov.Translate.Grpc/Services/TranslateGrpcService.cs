@@ -12,17 +12,20 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     private readonly ModelSessionManager _manager;
     private readonly Lazy<ILanguageDetector> _detector;
     private readonly ISpeechRecognizer _recognizer;
+    private readonly ISpeechSynthesizer _synthesizer;
     private readonly TranslationOptions _translationOptions;
 
     public TranslateGrpcService(
         ModelSessionManager manager,
         Lazy<ILanguageDetector> detector,
         ISpeechRecognizer recognizer,
+        ISpeechSynthesizer synthesizer,
         IOptions<TranslationOptions> translationOptions)
     {
         _manager = manager;
         _detector = detector;
         _recognizer = recognizer;
+        _synthesizer = synthesizer;
         _translationOptions = translationOptions.Value;
     }
 
@@ -74,9 +77,11 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             // SttAvailable reflects whether a Whisper model is configured (not NullSpeechRecognizer).
             SttAvailable = !string.IsNullOrEmpty(_translationOptions.AudioToText),
-            TtsAvailable = false,
+            // TtsAvailable reflects whether any Piper voice is configured (not NullSpeechSynthesizer).
+            TtsAvailable = _translationOptions.TextToAudio.Count > 0,
         };
         response.AvailableModels.AddRange(_manager.GetAvailableModels());
+        response.AvailableVoices.AddRange(_translationOptions.TextToAudio.Keys.Order());
         return Task.FromResult(response);
     }
 
@@ -162,9 +167,37 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         return response;
     }
 
-    public override Task<SynthesizeSpeechResponse> SynthesizeSpeech(
+    public override async Task<SynthesizeSpeechResponse> SynthesizeSpeech(
         SynthesizeSpeechRequest request, ServerCallContext context)
-        => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 3"));
+    {
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+
+        // Piper uses BCP-47 language codes (e.g. "en", "ru", "uk")
+        var language = string.IsNullOrWhiteSpace(request.Language)
+            ? string.Empty
+            : ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+
+        Core.Models.SynthesisResult result;
+        try
+        {
+            result = await _synthesizer.SynthesizeAsync(
+                request.Text,
+                language,
+                request.Voice,
+                request.Speed > 0f ? request.Speed : 1.0f,
+                context.CancellationToken);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+
+        return new SynthesizeSpeechResponse
+        {
+            AudioData  = Google.Protobuf.ByteString.CopyFrom(result.AudioData),
+            SampleRate = result.SampleRate,
+        };
+    }
 
     public override Task<TranslateAudioResponse> TranslateAudio(
         TranslateAudioRequest request, ServerCallContext context)

@@ -8,9 +8,10 @@ public static class ModelType
     public const string LibreTranslate = "LibreTranslate";
 
     public const string Whisper = "Whisper";
+    public const string Piper = "Piper";
 
     private static readonly HashSet<string> KnownTypes =
-        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, FastText, LibreTranslate, Whisper };
+        new(StringComparer.OrdinalIgnoreCase) { NLLB, M2M100, FastText, LibreTranslate, Whisper, Piper };
 
     public static bool IsKnown(string type) => KnownTypes.Contains(type);
 }

@@ -38,6 +38,9 @@ var translationSection = builder.Configuration.GetSection("Translation");
 var defaultModel  = translationSection["DefaultModel"]  ?? string.Empty;
 var audioToText   = translationSection["AudioToText"]   ?? string.Empty;
 var allowedModels = translationSection.GetSection("AllowedModels").Get<string[]>() ?? [];
+var textToAudio   = translationSection.GetSection("TextToAudio")
+    .GetChildren()
+    .ToDictionary(s => s.Key, s => s.Value ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
 if (!string.IsNullOrWhiteSpace(defaultModel) && !rawModels.ContainsKey(defaultModel))
     throw new InvalidOperationException(
@@ -57,6 +60,18 @@ if (!string.IsNullOrWhiteSpace(audioToText))
         throw new InvalidOperationException(
             $"Configuration error: Translation:AudioToText '{audioToText}' must have Type=Whisper " +
             $"(found '{attCfg.Type}').");
+}
+
+foreach (var (lang, modelKey) in textToAudio)
+{
+    if (string.IsNullOrWhiteSpace(modelKey)) continue;
+    if (!rawModels.TryGetValue(modelKey, out var ttaCfg))
+        throw new InvalidOperationException(
+            $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' is not defined in Models.");
+    if (!ttaCfg.Type.Equals(ModelType.Piper, StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+            $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' must have Type=Piper " +
+            $"(found '{ttaCfg.Type}').");
 }
 
 // --- Register named HttpClients for LibreTranslate entries ---
@@ -85,6 +100,10 @@ builder.Services.AddSingleton<Lazy<ILanguageDetector>>(sp =>
 // --- Speech recognizer (Whisper): lazy load + TTL, or NullSpeechRecognizer if not configured ---
 builder.Services.AddSingleton<ISpeechRecognizer>(sp =>
     ModelBootstrap.CreateSpeechRecognizer(sp, audioToText, rawModels, ResolvePath));
+
+// --- Speech synthesizer (Piper): one voice per language, lazy load + TTL, or NullSpeechSynthesizer ---
+builder.Services.AddSingleton<ISpeechSynthesizer>(sp =>
+    ModelBootstrap.CreateSpeechSynthesizer(sp, textToAudio, rawModels, ResolvePath));
 
 // --- ModelSessionManager: lazy init + TTL eviction (text translation only) ---
 builder.Services.AddSingleton<ModelSessionManager>(sp =>
