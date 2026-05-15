@@ -24,7 +24,6 @@ namespace Lopatnov.Translate.Grpc;
 /// </summary>
 internal sealed class WarmUpHostedService : BackgroundService
 {
-    private readonly WarmUpOptions _opts;
     private readonly IConfiguration _config;
     private readonly ModelSessionManager _manager;
     private readonly ISpeechRecognizer _recognizer;
@@ -33,7 +32,6 @@ internal sealed class WarmUpHostedService : BackgroundService
     private readonly ILogger<WarmUpHostedService> _logger;
 
     public WarmUpHostedService(
-        IOptions<WarmUpOptions> opts,
         IConfiguration config,
         ModelSessionManager manager,
         ISpeechRecognizer recognizer,
@@ -41,26 +39,26 @@ internal sealed class WarmUpHostedService : BackgroundService
         IOptions<TranslationOptions> translationOpts,
         ILogger<WarmUpHostedService> logger)
     {
-        _opts           = opts.Value;
-        _config         = config;
-        _manager        = manager;
-        _recognizer     = recognizer;
-        _synthesizer    = synthesizer;
+        _config          = config;
+        _manager         = manager;
+        _recognizer      = recognizer;
+        _synthesizer     = synthesizer;
         _translationOpts = translationOpts.Value;
-        _logger         = logger;
+        _logger          = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (_opts.Models.Length == 0)
+        var models = _translationOpts.WarmUp;
+        if (models.Length == 0)
             return;
 
         _logger.LogInformation(
             "WarmUp: starting pre-load of {Count} model(s): {Models}",
-            _opts.Models.Length,
-            string.Join(", ", _opts.Models));
+            models.Length,
+            string.Join(", ", models));
 
-        foreach (var name in _opts.Models)
+        foreach (var name in models)
         {
             if (stoppingToken.IsCancellationRequested)
                 break;

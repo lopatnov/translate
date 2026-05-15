@@ -29,4 +29,12 @@ public sealed class TranslationOptions
     /// Empty or absent = TTS disabled (SynthesizeSpeech returns FailedPrecondition).
     /// </summary>
     public Dictionary<string, string> TextToAudio { get; set; } = [];
+
+    /// <summary>
+    /// Names of model entries (keys in the <c>Models</c> section) to warm up at startup.
+    /// Each listed model receives a minimal synthetic request so its ONNX graph is
+    /// compiled and weights are loaded before real traffic arrives.
+    /// Empty array = warm-up disabled.
+    /// </summary>
+    public string[] WarmUp { get; set; } = [];
 }
