@@ -191,6 +191,15 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
+        catch (InvalidOperationException ex)
+        {
+            // Covers: espeak-ng not found, espeak-ng non-zero exit, model config issues
+            throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+        }
+        catch (FileNotFoundException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
 
         return new SynthesizeSpeechResponse
         {
