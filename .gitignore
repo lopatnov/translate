@@ -61,3 +61,6 @@ nunit-*.xml
 /.playwright-mcp
 /src/Lopatnov.Translate.Grpc/Lopatnov.Translate.Grpc.csproj.user
 /draft
+
+# IDE / tooling caches
+*.lscache
