@@ -208,9 +208,94 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         };
     }
 
-    public override Task<TranslateAudioResponse> TranslateAudio(
+    public override async Task<TranslateAudioResponse> TranslateAudio(
         TranslateAudioRequest request, ServerCallContext context)
-        => throw new RpcException(new Status(StatusCode.Unimplemented, "Phase 4"));
+    {
+        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+
+        // --- Step 1: Speech → Text (Whisper) ---
+        // Whisper expects BCP-47 language codes (e.g. "en", "ru") or "auto".
+        var sttLanguage = string.IsNullOrWhiteSpace(request.SourceLanguage) ||
+                          request.SourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? "auto"
+            : ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Bcp47);
+
+        Core.Models.TranscriptionResult transcription;
+        try
+        {
+            transcription = await _recognizer.TranscribeAsync(
+                request.AudioData.ToByteArray(),
+                sttLanguage,
+                context.CancellationToken);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+
+        if (string.IsNullOrWhiteSpace(transcription.FullText))
+            return new TranslateAudioResponse
+            {
+                Transcription  = string.Empty,
+                TranslatedText = string.Empty,
+                SampleRate     = 0,
+            };
+
+        // --- Step 2: Text → Text translation ---
+        // Translators expect FLORES-200 codes internally.
+        // Use detected language from Whisper (BCP-47) as source if available.
+        var detectedBcp47 = transcription.DetectedLanguage;
+        var sourceFlores = !string.IsNullOrEmpty(detectedBcp47)
+            ? ConvertLanguageCode(detectedBcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200)
+            : ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+
+        var targetFlores = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
+
+        string translatedText;
+        using (var lease = ResolveTranslator(string.Empty)) // default model
+        {
+            translatedText = await lease.Translator.TranslateAsync(
+                transcription.FullText,
+                sourceFlores,
+                targetFlores,
+                context.CancellationToken);
+        }
+
+        // --- Step 3: Text → Speech (Piper) ---
+        // Piper expects BCP-47 language codes.
+        var targetBcp47 = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Bcp47);
+
+        Core.Models.SynthesisResult synthesis;
+        try
+        {
+            synthesis = await _synthesizer.SynthesizeAsync(
+                translatedText,
+                targetBcp47,
+                request.TargetVoice,
+                speed: 1.0f,
+                context.CancellationToken);
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+        }
+        catch (FileNotFoundException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+
+        return new TranslateAudioResponse
+        {
+            TranslatedAudio = Google.Protobuf.ByteString.CopyFrom(synthesis.AudioData),
+            Transcription   = transcription.FullText,
+            TranslatedText  = translatedText,
+            SampleRate      = synthesis.SampleRate,
+        };
+    }
 
     private ModelSessionManager.TranslatorLease ResolveTranslator(string? provider)
     {
