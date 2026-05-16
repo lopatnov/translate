@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using Whisper.net;
+using Whisper.net.LibraryLoader;
 
 namespace Lopatnov.Translate.Whisper;
 
@@ -186,6 +187,12 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
                     log.LogInformation("Loading Whisper model from {Path}", _options.ModelPath);
 #pragma warning restore CA1873
                 _factory = CreateFactory();
+#pragma warning disable CA1873
+                if (_logger is { } loadedLog)
+                    loadedLog.LogInformation(
+                        "Whisper runtime selected: {Backend}",
+                        RuntimeOptions.LoadedLibrary?.ToString() ?? "unknown");
+#pragma warning restore CA1873
             }
 
             Interlocked.Exchange(ref _lastUsedTicks, DateTime.UtcNow.Ticks);
@@ -199,6 +206,33 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
 
     private WhisperFactory CreateFactory()
     {
+        // Configure runtime probe order based on ExecutionProvider / Backend setting.
+        // Multiple Whisper.net.Runtime.* packages can be installed simultaneously;
+        // the library picks the first one whose native library loads successfully.
+        RuntimeOptions.RuntimeLibraryOrder = _options.Backend.Trim().ToLowerInvariant() switch
+        {
+            "" or "auto" =>
+            [
+                RuntimeLibrary.Cuda, RuntimeLibrary.Cuda12,
+                RuntimeLibrary.Vulkan, RuntimeLibrary.CoreML,
+                RuntimeLibrary.OpenVino, RuntimeLibrary.Cpu,
+            ],
+            "cpu"    => [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+            "cuda"   => [RuntimeLibrary.Cuda, RuntimeLibrary.Cuda12, RuntimeLibrary.Cpu],
+            "vulkan" => [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu],
+            "coreml" => [RuntimeLibrary.CoreML, RuntimeLibrary.Cpu],
+            var unknown => throw new ArgumentException(
+                $"Unknown Whisper backend '{unknown}'. " +
+                "Valid values: auto, cpu, cuda, vulkan, coreml.",
+                nameof(WhisperOptions.Backend)),
+        };
+
+#pragma warning disable CA1873 // cheap join
+        if (_logger is { } log)
+            log.LogInformation("Whisper runtime probe order: {Order}",
+                string.Join(" → ", RuntimeOptions.RuntimeLibraryOrder));
+#pragma warning restore CA1873
+
         if (!File.Exists(_options.ModelPath))
             throw new FileNotFoundException(
                 $"Whisper model not found at '{_options.ModelPath}'. " +

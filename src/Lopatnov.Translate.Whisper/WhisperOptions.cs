@@ -19,13 +19,16 @@ public sealed class WhisperOptions
     public int TtlMinutes { get; set; } = 30;
 
     /// <summary>
-    /// Whisper.net inference backend. One of: "cpu" (default), "cuda", "coreml", "openvino".
-    /// The active backend is determined entirely by the installed Whisper.net.Runtime.* NuGet package —
-    /// no code change is needed. This field is used only for logging at startup.
-    ///   cpu      → Whisper.net.Runtime (default, all platforms)
-    ///   cuda     → Whisper.net.Runtime.Cuda (NVIDIA GPU)
-    ///   coreml   → Whisper.net.Runtime.CoreML (Apple Silicon)
-    ///   openvino → Whisper.net.Runtime.OpenVino (Intel NPU/GPU)
+    /// Preferred Whisper.net runtime backend. Controls <c>RuntimeOptions.RuntimeLibraryOrder</c>.
+    /// Leave empty or set to "auto" (default) to let Whisper.net probe in order:
+    ///   Cuda → Cuda12 → Vulkan → CoreML → OpenVino → Cpu
+    /// Valid explicit values:
+    ///   auto    — probe all installed runtimes, pick best (recommended)
+    ///   cpu     — CPU only (Whisper.net.Runtime)
+    ///   cuda    — NVIDIA GPU (Whisper.net.Runtime.Cuda), falls back to CPU
+    ///   vulkan  — Vulkan GPU, incl. Intel Arc (Whisper.net.Runtime.Vulkan), falls back to CPU
+    ///   coreml  — Apple Silicon (Whisper.net.Runtime.CoreML), falls back to CPU
+    /// Unknown values throw <see cref="ArgumentException"/> at model load time.
     /// </summary>
-    public string Backend { get; set; } = "cpu";
+    public string Backend { get; set; } = string.Empty;
 }

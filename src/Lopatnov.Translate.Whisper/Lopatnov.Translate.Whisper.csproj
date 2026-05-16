@@ -9,7 +9,15 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Whisper.net" Version="1.9.1-preview1" />
+    <!-- Multiple runtimes installed simultaneously — Whisper.net auto-selects the best available.
+         Default probe order: Cuda → Cuda12 → Vulkan → CoreML → OpenVino → Cpu.
+         Override per-model with Models:<key>:ExecutionProvider in appsettings.json. -->
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1-preview1" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1-preview1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1-preview1"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <PackageReference Include="Whisper.net.Runtime.CoreML" Version="1.9.1-preview1"
+                      Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
   </ItemGroup>
 
   <PropertyGroup>
