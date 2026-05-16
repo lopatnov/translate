@@ -35,10 +35,11 @@ public sealed class ModelConfig
 
     /// <summary>
     /// ONNX execution provider for GPU/CPU selection.
-    /// Supported values: "cpu" (default), "directml" (Windows DX12 — Intel/AMD/NVIDIA),
-    /// "cuda" (NVIDIA). Requires the matching Microsoft.ML.OnnxRuntime.* NuGet package;
-    /// gracefully falls back to CPU with a warning when the provider is unavailable.
+    /// Supported values: "cpu", "directml" (Windows DX12 — Intel/AMD/NVIDIA), "cuda" (NVIDIA).
+    /// Empty or absent (default) — uses the ONNX Runtime default (CPU).
+    /// Throws <see cref="ArgumentException"/> for unrecognised values.
+    /// Requires the matching Microsoft.ML.OnnxRuntime.* NuGet package when using GPU.
     /// Not applicable to FastText, LibreTranslate, or Whisper model types.
     /// </summary>
-    public string ExecutionProvider { get; set; } = "cpu";
+    public string ExecutionProvider { get; set; } = string.Empty;
 }
