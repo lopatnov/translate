@@ -48,10 +48,23 @@ public sealed class OnnxExecutionProviderHelperTests
     [Theory]
     [InlineData("unknown")]
     [InlineData("tensorrt")]
+    [InlineData("openvino")]
+    [InlineData("coreml")]
+    public void BuildSessionOptions_UnknownProvider_ThrowsArgumentException(string provider)
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            OnnxExecutionProviderHelper.BuildSessionOptions(provider));
+
+        Assert.Contains("Valid values: cpu, directml, cuda", ex.Message);
+        Assert.Contains(provider, ex.Message);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public void BuildSessionOptions_UnknownProvider_FallsBackToCpuWithoutThrowing(string provider)
+    public void BuildSessionOptions_EmptyProvider_FallsBackToCpu(string provider)
     {
+        // Empty/whitespace is treated as "cpu" — no exception.
         var ex = Record.Exception(() =>
         {
             using var opts = OnnxExecutionProviderHelper.BuildSessionOptions(provider);
