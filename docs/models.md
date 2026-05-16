@@ -17,6 +17,8 @@
   - [LibreTranslate](#libretranslate)
 - Speech-to-Text
   - [Whisper](#whisper)
+- Text-to-Speech
+  - [Piper TTS](#piper-tts)
 
 ---
 
@@ -422,4 +424,95 @@ To switch models: change `AudioToText` — no code changes needed.
 | Property | Required | Description |
 | --- | --- | --- |
 | `Path` | ✅ | Path to the `.bin` ggml model file |
+
+---
+
+## Text-to-Speech
+
+---
+
+### Piper TTS
+
+**Piper · ONNX format · language-specific voices**
+
+Runs locally via [ONNX Runtime](https://onnxruntime.ai/). Each voice is a separate ONNX model trained for one language. Text is phonemised by [espeak-ng](https://github.com/espeak-ng/espeak-ng) (must be installed separately) before inference. The model is loaded lazily on first request and unloaded after `ModelTtlMinutes` of inactivity.
+
+**License:**
+- Piper voices: **MIT** ✅ Unrestricted commercial use.
+- espeak-ng (system dependency): **GPL v3** — called as a subprocess, does not affect your code's license, but espeak-ng binaries must be distributed under GPL v3 terms.
+
+**System dependency: espeak-ng**
+
+| Platform | Install command |
+| --- | --- |
+| Debian / Ubuntu (Docker) | `apt-get install -y espeak-ng` |
+| Windows | [Download MSI from GitHub Releases](https://github.com/espeak-ng/espeak-ng/releases) — add to PATH |
+| macOS | `brew install espeak-ng` |
+
+**Download voices**
+
+Voices are hosted at [lopatnov/piper-voices](https://huggingface.co/lopatnov/piper-voices):
+
+```bash
+# English (en_US-joe-medium)
+huggingface-cli download lopatnov/piper-voices \
+  en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+
+# Russian (ru_RU-ruslan-medium)
+huggingface-cli download lopatnov/piper-voices \
+  ru_RU/ru_RU-ruslan-medium.onnx ru_RU/ru_RU-ruslan-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+
+# Ukrainian (uk_UA-ukrainian_tts-medium, 3 speakers: lada / mykyta / tetiana)
+huggingface-cli download lopatnov/piper-voices \
+  uk_UA/uk_UA-ukrainian_tts-medium.onnx uk_UA/uk_UA-ukrainian_tts-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+```
+
+Each voice requires both the `.onnx` model file and its `.onnx.json` sidecar (phoneme map, sample rate, speaker info).
+
+**appsettings.json**
+
+```jsonc
+"Models": {
+  "piper-en-US": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx"
+  },
+  "piper-ru-RU": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/ru_RU/ru_RU-ruslan-medium.onnx"
+  },
+  "piper-uk-UA": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/uk_UA/uk_UA-ukrainian_tts-medium.onnx"
+  }
+},
+"Translation": {
+  "TextToAudio": {
+    "en": "piper-en-US",   // ISO 639-1 code → model key
+    "ru": "piper-ru-RU",
+    "uk": "piper-uk-UA"
+  }
+}
+```
+
+`TextToAudio` is a dictionary of ISO 639-1 language codes → model keys. If empty or absent, `SynthesizeSpeech` returns `FAILED_PRECONDITION`.
+
+**Multi-speaker voices**
+
+The Ukrainian voice (`uk_UA-ukrainian_tts-medium`) has 3 speakers. Select a speaker via the `voice` field in `SynthesizeSpeechRequest`:
+
+| `voice` value | Speaker |
+| --- | --- |
+| `lada` | Female (default when omitted) |
+| `mykyta` | Male |
+| `tetiana` | Female (different style) |
+
+**Properties for Piper:**
+
+| Property | Required | Description |
+| --- | --- | --- |
+| `Path` | ✅ | Path to the `.onnx` voice model file. The companion `.onnx.json` must exist at the same path + `.json`. |
 
