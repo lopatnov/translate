@@ -99,8 +99,14 @@ internal static class ModelBootstrap
         var modelPath  = resolvePath(wCfg.Path);
 
 #pragma warning disable CA1873 // arguments are cheap local variables
-        log.LogInformation("Registering Whisper STT model '{Key}' — will load lazily from {Path}",
+        log.LogInformation(
+            "Registering Whisper STT model '{Key}' — will load lazily from {Path}",
             audioToText, modelPath);
+        log.LogInformation(
+            "Whisper GPU note: backend is determined by the installed Whisper.net.Runtime.* " +
+            "NuGet package, not by ExecutionProvider config. " +
+            "Current: Whisper.net.Runtime (CPU). " +
+            "For GPU install: Whisper.net.Runtime.Cuda (NVIDIA) or Whisper.net.Runtime.OpenVino (Intel).");
 #pragma warning restore CA1873
 
         return new WhisperRecognizer(
