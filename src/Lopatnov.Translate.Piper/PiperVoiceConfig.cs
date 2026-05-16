@@ -18,6 +18,14 @@ internal sealed class PiperVoiceConfig
     [JsonPropertyName("inference")]
     public InferenceSection Inference { get; set; } = new();
 
+    /// <summary>
+    /// Phonemisation strategy: <c>"espeak"</c> (default) converts text to IPA via espeak-ng;
+    /// <c>"text"</c> maps raw text characters directly using <see cref="PhonemeIdMap"/>.
+    /// Ukrainian multi-speaker models typically use <c>"text"</c>.
+    /// </summary>
+    [JsonPropertyName("phoneme_type")]
+    public string PhonemeType { get; set; } = "espeak";
+
     [JsonPropertyName("num_speakers")]
     public int NumSpeakers { get; set; } = 1;
 

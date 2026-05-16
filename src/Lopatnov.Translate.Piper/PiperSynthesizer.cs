@@ -81,12 +81,20 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         {
             var (session, config) = await GetOrCreateSessionAsync(cancellationToken);
 
-            // Step 1: Phonemise text via espeak-ng
-            var ipaText = await EspeakPhonemizer.PhonemizeAsync(
-                text, config.Espeak.Voice, cancellationToken);
-
-            // Step 2: Map IPA → phoneme IDs
-            var phonemeIds = BuildPhonemeIds(ipaText, config.PhonemeIdMap);
+            // Step 1: Phonemise text → phoneme IDs.
+            // "espeak": convert text to IPA via espeak-ng, then look up IPA chars in the map.
+            // "text":   map raw text characters directly (e.g. Cyrillic for uk_UA voices).
+            long[] phonemeIds;
+            if (config.PhonemeType.Equals("text", StringComparison.OrdinalIgnoreCase))
+            {
+                phonemeIds = BuildPhonemeIdsFromText(text, config.PhonemeIdMap);
+            }
+            else
+            {
+                var ipaText = await EspeakPhonemizer.PhonemizeAsync(
+                    text, config.Espeak.Voice, cancellationToken);
+                phonemeIds = BuildPhonemeIds(ipaText, config.PhonemeIdMap);
+            }
 
             // Step 3: Resolve speaker ID (0 for single-speaker voices)
             var speakerId = ResolveSpeakerId(voice, config);
@@ -122,19 +130,68 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     {
         const long BOS = 0L;   // "_" — beginning of sentence
         const long EOS = 2L;   // "$" — end of sentence
-        const long PAD = 3L;   // " " — word break (inserted after each character)
+        const long PAD = 3L;   // " " — word break (inserted after each phoneme token)
+
+        // Sort map keys longest-first so multi-character phoneme tokens (ligatures,
+        // combining modifiers like "ːʲ") are matched before their individual components.
+        // espeak-ng 1.52 outputs some phonemes as multi-char sequences; a char-by-char
+        // loop would silently split and drop modifiers, causing the "moo" artefact.
+        var sortedKeys = phonemeIdMap.Keys
+            .OrderByDescending(k => k.Length)
+            .ToList();
 
         var ids = new List<long> { BOS };
 
-        foreach (var ch in ipaText)
+        int i = 0;
+        while (i < ipaText.Length)
+        {
+            bool matched = false;
+            foreach (var key in sortedKeys)
+            {
+                if (i + key.Length <= ipaText.Length &&
+                    ipaText.AsSpan(i, key.Length).SequenceEqual(key.AsSpan()))
+                {
+                    ids.AddRange(phonemeIdMap[key]);
+                    ids.Add(PAD);
+                    i += key.Length;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched)
+                i++; // skip unknown char, advance to avoid infinite loop
+        }
+
+        ids.Add(EOS);
+        return [.. ids];
+    }
+
+    /// <summary>
+    /// Builds phoneme IDs for voices with <c>"phoneme_type": "text"</c> (e.g. Ukrainian).
+    /// Maps raw text characters directly to IDs using the voice's <c>phoneme_id_map</c>,
+    /// bypassing espeak-ng entirely. Input is lowercased to match the map's case convention.
+    /// BOS (<c>_</c> = 0) prepended, EOS (<c>$</c> = 2) appended.
+    /// </summary>
+    internal static long[] BuildPhonemeIdsFromText(
+        string text,
+        IReadOnlyDictionary<string, long[]> phonemeIdMap)
+    {
+        const long BOS = 0L;
+        const long EOS = 2L;
+        const long PAD = 3L;
+
+        var ids = new List<long> { BOS };
+
+        // text-type maps use lowercase characters (Cyrillic letters, punctuation, spaces).
+        foreach (var ch in text.ToLowerInvariant())
         {
             var key = ch.ToString();
             if (phonemeIdMap.TryGetValue(key, out var mapped))
             {
                 ids.AddRange(mapped);
-                ids.Add(PAD); // word-break token after each phoneme
+                ids.Add(PAD);
             }
-            // Unknown characters are silently skipped (consistent with Piper reference impl)
+            // Unknown characters silently skipped (consistent with Piper reference impl)
         }
 
         ids.Add(EOS);
@@ -216,12 +273,25 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     /// </summary>
     internal static byte[] EncodeWav(float[] pcmSamples, int sampleRate)
     {
-        // Convert float32 [-1, 1] → int16 PCM
+        // Normalize float32 output to full int16 range.
+        // Piper ONNX models output values in roughly [-0.2, +0.2]; without normalisation
+        // the resulting audio is ~20% of maximum loudness. Peak normalisation brings the
+        // loudest sample to 98% of full scale (leaving a small headroom to avoid clipping).
+        const float headroom = 0.98f;
+        float peak = 0f;
+        for (int i = 0; i < pcmSamples.Length; i++)
+        {
+            var abs = Math.Abs(pcmSamples[i]);
+            if (abs > peak) peak = abs;
+        }
+        float scale = peak > 1e-6f ? headroom / peak : 1f; // avoid div-by-zero on silence
+
+        // Convert normalised float32 → int16 PCM
         var pcmShorts = new short[pcmSamples.Length];
         for (int i = 0; i < pcmSamples.Length; i++)
         {
-            var clamped = Math.Clamp(pcmSamples[i], -1.0f, 1.0f);
-            pcmShorts[i] = (short)(clamped * short.MaxValue);
+            var normalised = Math.Clamp(pcmSamples[i] * scale, -1.0f, 1.0f);
+            pcmShorts[i] = (short)(normalised * short.MaxValue);
         }
 
         int dataBytes = pcmShorts.Length * 2; // 2 bytes per int16 sample

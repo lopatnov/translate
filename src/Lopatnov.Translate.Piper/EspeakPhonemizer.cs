@@ -36,55 +36,64 @@ internal static class EspeakPhonemizer
         string espeakVoice,
         CancellationToken cancellationToken = default)
     {
-        // --ipa : output IPA phonemes
-        // -q    : quiet mode (no audio, only text output)
-        // -v    : voice name
-        // Text is piped via stdin to avoid argument-length limits and shell injection.
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName               = "espeak-ng",
-                Arguments              = $"--ipa -q -v {espeakVoice}",
-                RedirectStandardInput  = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                StandardInputEncoding  = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                StandardErrorEncoding  = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            },
-            EnableRaisingEvents = false,
-        };
-
+        // Write text to a temp file in UTF-8 (no BOM) and pass it via the -f flag.
+        // This avoids a Windows-specific issue where the .NET Process stdin pipe
+        // may silently mis-encode non-ASCII characters (Cyrillic, etc.) regardless
+        // of StandardInputEncoding, causing espeak-ng to fall back to English
+        // phonemisation or produce garbled IPA output.
+        var tmpFile = Path.GetTempFileName();
         try
         {
-            process.Start();
+            await File.WriteAllTextAsync(tmpFile, text,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName               = "espeak-ng",
+                    // --ipa : output IPA phonemes
+                    // -q    : quiet (no audio output)
+                    // -v    : voice name
+                    // -f    : read input from file (bypasses stdin encoding issues)
+                    Arguments              = $"--ipa -q -v {espeakVoice} -f \"{tmpFile}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    UseShellExecute        = false,
+                    StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    StandardErrorEncoding  = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                },
+                EnableRaisingEvents = false,
+            };
+
+            try
+            {
+                process.Start();
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
+            {
+                throw new InvalidOperationException(
+                    "espeak-ng was not found. " +
+                    "Install it via 'apt-get install -y espeak-ng' (Linux/Docker) or " +
+                    "from https://github.com/espeak-ng/espeak-ng/releases (Windows).", ex);
+            }
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(
+                    $"espeak-ng exited with code {process.ExitCode}. stderr: {stderr.Trim()}");
+
+            return stdout;
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
+        finally
         {
-            throw new InvalidOperationException(
-                "espeak-ng was not found. " +
-                "Install it via 'apt-get install -y espeak-ng' (Linux/Docker) or " +
-                "from https://github.com/espeak-ng/espeak-ng/releases (Windows).", ex);
+            try { File.Delete(tmpFile); } catch { /* best-effort cleanup */ }
         }
-
-        // Write input text to stdin and close it so espeak-ng sees EOF.
-        await process.StandardInput.WriteAsync(text);
-        process.StandardInput.Close();
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        await process.WaitForExitAsync(cancellationToken);
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(
-                $"espeak-ng exited with code {process.ExitCode}. stderr: {stderr.Trim()}");
-
-        return stdout;
     }
 }
