@@ -38,8 +38,15 @@ public static class OnnxExecutionProviderHelper
                 break;
 
             case "cpu":
-            default:
                 logger?.LogDebug("ONNX execution provider: CPU");
+                break;
+
+            default:
+                if (!string.IsNullOrWhiteSpace(provider))
+                    logger?.LogWarning(
+                        "Unknown execution provider '{Provider}' — falling back to CPU. " +
+                        "Valid values: cpu, directml, cuda.",
+                        provider.Trim());
                 break;
         }
 
