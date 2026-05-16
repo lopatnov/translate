@@ -31,6 +31,7 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     private readonly PiperOptions _options;
     private readonly TimeSpan _ttl;
     private readonly ILogger<PiperSynthesizer>? _logger;
+    private readonly SessionOptions? _sessionOptions;
 
     // Lazy load + TTL eviction state (mirrors WhisperRecognizer pattern)
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -43,11 +44,13 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
 
     public PiperSynthesizer(
         IOptions<PiperOptions> options,
-        ILogger<PiperSynthesizer>? logger = null)
+        ILogger<PiperSynthesizer>? logger = null,
+        SessionOptions? sessionOptions = null)
     {
         _options = options.Value;
         _ttl = TimeSpan.FromMinutes(_options.TtlMinutes > 0 ? _options.TtlMinutes : 30);
         _logger = logger;
+        _sessionOptions = sessionOptions;
 
         _evictionTimer = new Timer(EvictIfIdle, null,
             dueTime: TimeSpan.FromMinutes(1),
@@ -285,7 +288,9 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
 #pragma warning restore CA1873
 
                 _voiceConfig = PiperVoiceConfig.LoadFrom(configPath);
-                _session = new InferenceSession(modelPath);
+                _session = _sessionOptions is not null
+                    ? new InferenceSession(modelPath, _sessionOptions)
+                    : new InferenceSession(modelPath);
             }
 
             Interlocked.Exchange(ref _lastUsedTicks, DateTime.UtcNow.Ticks);

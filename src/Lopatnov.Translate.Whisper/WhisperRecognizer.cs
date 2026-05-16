@@ -205,6 +205,10 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
                 "Run scripts/download-whisper.ps1 to fetch it.",
                 _options.ModelPath);
 
+        _logger?.LogInformation(
+            "Whisper backend: {Backend} (determined by installed Whisper.net.Runtime.* package)",
+            _options.Backend);
+
         return WhisperFactory.FromPath(_options.ModelPath);
     }
 

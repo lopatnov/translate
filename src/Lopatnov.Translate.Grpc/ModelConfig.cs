@@ -32,4 +32,13 @@ public sealed class ModelConfig
     public string VocabFile { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ONNX execution provider for GPU/CPU selection.
+    /// Supported values: "cpu" (default), "directml" (Windows DX12 — Intel/AMD/NVIDIA),
+    /// "cuda" (NVIDIA). Requires the matching Microsoft.ML.OnnxRuntime.* NuGet package;
+    /// gracefully falls back to CPU with a warning when the provider is unavailable.
+    /// Not applicable to FastText, LibreTranslate, or Whisper model types.
+    /// </summary>
+    public string ExecutionProvider { get; set; } = "cpu";
 }

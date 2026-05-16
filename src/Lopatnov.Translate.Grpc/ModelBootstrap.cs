@@ -7,6 +7,7 @@ using Lopatnov.Translate.Nllb;
 using Lopatnov.Translate.Piper;
 using Lopatnov.Translate.Whisper;
 using Microsoft.Extensions.Options;
+using SessionOptions = Microsoft.ML.OnnxRuntime.SessionOptions;
 
 namespace Lopatnov.Translate.Grpc;
 
@@ -107,6 +108,7 @@ internal static class ModelBootstrap
             {
                 ModelPath  = modelPath,
                 TtlMinutes = translOpts.ModelTtlMinutes,
+                Backend    = wCfg.ExecutionProvider,
             }),
             log);
     }
@@ -156,13 +158,14 @@ internal static class ModelBootstrap
                 lang, modelKey, modelPath);
 #pragma warning restore CA1873
 
+            SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(pCfg.ExecutionProvider, log);
             voices[lang] = new PiperSynthesizer(
                 Options.Create(new PiperOptions
                 {
                     ModelPath  = modelPath,
                     TtlMinutes = translOpts.ModelTtlMinutes,
                 }),
-                log);
+                log, so);
         }
 
         if (voices.Count == 0)
@@ -199,27 +202,37 @@ internal static class ModelBootstrap
             cfg.Type.Equals(ModelType.Piper,    StringComparison.OrdinalIgnoreCase))
             return;
 
+        var epLogger = sp.GetService<ILoggerFactory>()?.CreateLogger(nameof(ModelBootstrap));
+
         if (cfg.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(cfg.Path))
         {
             var c = cfg; var n = name;
-            factories[n] = () => new NllbTranslator(Options.Create(new NllbOptions
+            factories[n] = () =>
             {
-                Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
-            }));
+                SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, epLogger);
+                return new NllbTranslator(new NllbOptions
+                {
+                    Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                    TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                    MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
+                }, null, null, null, so);
+            };
         }
         else if (cfg.Type.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase)
                  && !string.IsNullOrWhiteSpace(cfg.Path))
         {
             var c = cfg; var n = name;
-            factories[n] = () => new M2M100Translator(Options.Create(new M2M100Options
+            factories[n] = () =>
             {
-                Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
-            }));
+                SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, epLogger);
+                return new M2M100Translator(new M2M100Options
+                {
+                    Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                    TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                    MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
+                }, null, null, null, so);
+            };
         }
         else if (cfg.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase)
                  && !string.IsNullOrWhiteSpace(cfg.BaseUrl))

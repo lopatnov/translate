@@ -17,4 +17,15 @@ public sealed class WhisperOptions
     /// Mirrors Translation:ModelTtlMinutes so all models share one TTL setting.
     /// </summary>
     public int TtlMinutes { get; set; } = 30;
+
+    /// <summary>
+    /// Whisper.net inference backend. One of: "cpu" (default), "cuda", "coreml", "openvino".
+    /// The active backend is determined entirely by the installed Whisper.net.Runtime.* NuGet package —
+    /// no code change is needed. This field is used only for logging at startup.
+    ///   cpu      → Whisper.net.Runtime (default, all platforms)
+    ///   cuda     → Whisper.net.Runtime.Cuda (NVIDIA GPU)
+    ///   coreml   → Whisper.net.Runtime.CoreML (Apple Silicon)
+    ///   openvino → Whisper.net.Runtime.OpenVino (Intel NPU/GPU)
+    /// </summary>
+    public string Backend { get; set; } = "cpu";
 }

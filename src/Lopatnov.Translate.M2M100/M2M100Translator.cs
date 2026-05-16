@@ -18,10 +18,11 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
     private readonly bool _ownsDecoder;
 
     public M2M100Translator(IOptions<M2M100Options> options)
-        : this(options.Value, null, null, null) { }
+        : this(options.Value, null, null, null, null) { }
 
     public M2M100Translator(M2M100Options options, IM2M100Tokenizer? tokenizer,
-        IOnnxSession? encoderSession, IOnnxSession? decoderSession)
+        IOnnxSession? encoderSession, IOnnxSession? decoderSession,
+        SessionOptions? sessionOptions = null)
     {
         if (options.MaxTokens <= 0)
             throw new ArgumentException($"MaxTokens must be > 0, got {options.MaxTokens}.", nameof(options));
@@ -32,10 +33,10 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
             options.TokenizerConfigFile, options.VocabFile);
         _ownsEncoder = encoderSession is null;
         _encoderSession = encoderSession ?? new OnnxSessionAdapter(
-            Path.Combine(options.Path, options.EncoderFile));
+            Path.Combine(options.Path, options.EncoderFile), sessionOptions);
         _ownsDecoder = decoderSession is null;
         _decoderSession = decoderSession ?? new OnnxSessionAdapter(
-            Path.Combine(options.Path, options.DecoderFile));
+            Path.Combine(options.Path, options.DecoderFile), sessionOptions);
     }
 
     public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,

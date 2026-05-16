@@ -17,9 +17,10 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     private readonly bool _ownsDecoder;
 
     public NllbTranslator(IOptions<NllbOptions> options)
-        : this(options.Value, null, null, null) { }
+        : this(options.Value, null, null, null, null) { }
 
-    public NllbTranslator(NllbOptions options, INllbTokenizer? tokenizer, IOnnxSession? encoderSession, IOnnxSession? decoderSession)
+    public NllbTranslator(NllbOptions options, INllbTokenizer? tokenizer, IOnnxSession? encoderSession, IOnnxSession? decoderSession,
+        SessionOptions? sessionOptions = null)
     {
         if (options.BeamSize > 1)
             throw new NotSupportedException($"BeamSize > 1 is not implemented; only greedy decoding (BeamSize = 1) is supported.");
@@ -30,9 +31,9 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         _ownsTokenizer = tokenizer is null;
         _tokenizer = tokenizer ?? new NllbTokenizer(options.Path, options.TokenizerFile, options.TokenizerConfigFile);
         _ownsEncoder = encoderSession is null;
-        _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile));
+        _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile), sessionOptions);
         _ownsDecoder = decoderSession is null;
-        _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile));
+        _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile), sessionOptions);
     }
 
     public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
