@@ -13,7 +13,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+    <!-- Windows: DirectML supports Intel/AMD/NVIDIA via DX12 + falls back to CPU -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- Linux/macOS: CPU-only baseline; swap to OnnxRuntime.Gpu for NVIDIA CUDA -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0"
+                      Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
   <ItemGroup>
