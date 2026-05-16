@@ -261,11 +261,14 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         br.ReadInt64();                          // n = dim
         int codesize = br.ReadInt32();
         byte[] codes = br.ReadBytes(codesize);
-        br.ReadInt32();                          // pqDimStored
+        int pqDim = br.ReadInt32();              // total PQ dimension (= model dim)
         int pqNsubq = br.ReadInt32();
         int pqDsub = br.ReadInt32();
         int pqLastDsub = br.ReadInt32();
-        int centroidsCount = pqNsubq * KCENT * Math.Max(pqDsub, pqLastDsub);
+        // fastText writes exactly pqDim * KCENT centroid floats regardless of sub-quantizer sizes.
+        // The old formula `pqNsubq * KCENT * Max(pqDsub, pqLastDsub)` over-reads the stream
+        // whenever dim % dsub != 0 (non-uniform PQ), corrupting the output matrix and labels.
+        int centroidsCount = pqDim * KCENT;
         float[] pqCentroids = new float[centroidsCount];
         for (int i = 0; i < centroidsCount; i++) pqCentroids[i] = br.ReadSingle();
 
