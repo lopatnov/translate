@@ -37,43 +37,54 @@ public sealed class PiperSynthesizerTests
     // BuildPhonemeIds
     // -------------------------------------------------------------------------
 
+    // Piper reference convention (piper1-gpl/src/piper/const.py + phoneme_ids.py):
+    //   BOS = "^" → ID 1   EOS = "$" → ID 2   PAD = "_" → ID 0
+    // Sequence: [BOS(1), PAD(0), phoneme, PAD(0), ..., EOS(2)]
+    // Maps that include "^"/"_"/"$" keys exercise the lookup path;
+    // maps without them fall back to defaults [1], [0], [2].
+
     [Fact]
     public void BuildPhonemeIds_AlwaysStartsWithBosAndEndsWithEos()
     {
         var map = new Dictionary<string, long[]>
         {
+            ["^"] = [1L],   // BOS
+            ["_"] = [0L],   // PAD
+            ["$"] = [2L],   // EOS
             ["h"] = [20L],
             ["i"] = [21L],
         };
 
         var ids = PiperSynthesizer.BuildPhonemeIds("hi", map);
 
-        Assert.Equal(0L, ids[0]);                  // BOS "_"
-        Assert.Equal(2L, ids[^1]);                 // EOS "$"
+        Assert.Equal(1L, ids[0]);   // BOS "^"
+        Assert.Equal(2L, ids[^1]);  // EOS "$"
     }
 
     [Fact]
     public void BuildPhonemeIds_EmptyInput_ReturnsBosEosOnly()
     {
+        // No "^"/"_"/"$" keys → falls back to defaults 1/0/2.
         var map = new Dictionary<string, long[]>();
         var ids = PiperSynthesizer.BuildPhonemeIds(string.Empty, map);
 
-        Assert.Equal(2, ids.Length);
-        Assert.Equal(0L, ids[0]); // BOS
-        Assert.Equal(2L, ids[1]); // EOS
+        // BOS(1) + PAD(0) + EOS(2) = 3 elements
+        Assert.Equal(3, ids.Length);
+        Assert.Equal(1L, ids[0]); // BOS default
+        Assert.Equal(0L, ids[1]); // PAD after BOS default
+        Assert.Equal(2L, ids[2]); // EOS default
     }
 
     [Fact]
     public void BuildPhonemeIds_UnknownPhonemes_AreSkipped()
     {
-        // Map with only one known key
+        // Only "a" known; "b" and "c" are skipped.
         var map = new Dictionary<string, long[]> { ["a"] = [14L] };
 
-        // "abc" — only "a" is known
         var ids = PiperSynthesizer.BuildPhonemeIds("abc", map);
 
-        // Expected: [BOS=0, 14 (a), PAD=3, EOS=2]
-        Assert.Equal(new long[] { 0L, 14L, 3L, 2L }, ids);
+        // BOS(1), PAD(0), 14(a), PAD(0), EOS(2)
+        Assert.Equal(new long[] { 1L, 0L, 14L, 0L, 2L }, ids);
     }
 
     [Fact]
@@ -87,8 +98,8 @@ public sealed class PiperSynthesizerTests
 
         var ids = PiperSynthesizer.BuildPhonemeIds("ab", map);
 
-        // BOS, a, PAD, b, PAD, EOS
-        Assert.Equal(new long[] { 0L, 14L, 3L, 15L, 3L, 2L }, ids);
+        // BOS(1), PAD(0), a(14), PAD(0), b(15), PAD(0), EOS(2)
+        Assert.Equal(new long[] { 1L, 0L, 14L, 0L, 15L, 0L, 2L }, ids);
     }
 
     // -------------------------------------------------------------------------

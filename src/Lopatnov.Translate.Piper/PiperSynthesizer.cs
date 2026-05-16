@@ -1,3 +1,4 @@
+using System.Text;
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -128,19 +129,32 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         string ipaText,
         IReadOnlyDictionary<string, long[]> phonemeIdMap)
     {
-        const long BOS = 0L;   // "_" — beginning of sentence
-        const long EOS = 2L;   // "$" — end of sentence
-        const long PAD = 3L;   // " " — word break (inserted after each phoneme token)
+        // Piper convention (from piper1-gpl/src/piper/const.py + phoneme_ids.py):
+        //   PAD = "_"  → ID 0   (word-break / padding separator)
+        //   BOS = "^"  → ID 1   (beginning of sentence)
+        //   EOS = "$"  → ID 2   (end of sentence)
+        //   " "        → ID 3   (space between words — NOT the separator!)
+        // Reference sequence: [BOS, PAD, phoneme, PAD, phoneme, PAD, ..., EOS]
+        // The PAD immediately after BOS is required by the trained model.
+        var bosIds = phonemeIdMap.TryGetValue("^", out var b) ? b : [1L];
+        var eosIds = phonemeIdMap.TryGetValue("$", out var e) ? e : [2L];
+        var padIds = phonemeIdMap.TryGetValue("_", out var p) ? p : [0L];
 
-        // Sort map keys longest-first so multi-character phoneme tokens (ligatures,
-        // combining modifiers like "ːʲ") are matched before their individual components.
-        // espeak-ng 1.52 outputs some phonemes as multi-char sequences; a char-by-char
-        // loop would silently split and drop modifiers, causing the "moo" artefact.
+        // NFD-normalise IPA output: the Piper reference phonemizer applies
+        // unicodedata.normalize("NFD", ...) before splitting into codepoints,
+        // separating combining marks (e.g. ː̪) into individual characters so
+        // they can be looked up separately in the phoneme_id_map.
+        ipaText = ipaText.Normalize(NormalizationForm.FormD);
+
+        // Greedy longest-match — try multi-char keys before single-char ones
+        // to handle combined tokens from espeak-ng 1.52.
         var sortedKeys = phonemeIdMap.Keys
             .OrderByDescending(k => k.Length)
             .ToList();
 
-        var ids = new List<long> { BOS };
+        var ids = new List<long>();
+        ids.AddRange(bosIds);   // BOS = "^"
+        ids.AddRange(padIds);   // PAD after BOS (required by piper reference)
 
         int i = 0;
         while (i < ipaText.Length)
@@ -152,17 +166,17 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
                     ipaText.AsSpan(i, key.Length).SequenceEqual(key.AsSpan()))
                 {
                     ids.AddRange(phonemeIdMap[key]);
-                    ids.Add(PAD);
+                    ids.AddRange(padIds);   // PAD after each phoneme token
                     i += key.Length;
                     matched = true;
                     break;
                 }
             }
             if (!matched)
-                i++; // skip unknown char, advance to avoid infinite loop
+                i++; // skip unknown char
         }
 
-        ids.Add(EOS);
+        ids.AddRange(eosIds);   // EOS = "$"
         return [.. ids];
     }
 
@@ -176,25 +190,28 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         string text,
         IReadOnlyDictionary<string, long[]> phonemeIdMap)
     {
-        const long BOS = 0L;
-        const long EOS = 2L;
-        const long PAD = 3L;
+        // Same BOS/PAD/EOS convention as BuildPhonemeIds (piper reference).
+        var bosIds = phonemeIdMap.TryGetValue("^", out var b) ? b : [1L];
+        var eosIds = phonemeIdMap.TryGetValue("$", out var e) ? e : [2L];
+        var padIds = phonemeIdMap.TryGetValue("_", out var p) ? p : [0L];
 
-        var ids = new List<long> { BOS };
+        var ids = new List<long>();
+        ids.AddRange(bosIds);
+        ids.AddRange(padIds);   // PAD after BOS
 
-        // text-type maps use lowercase characters (Cyrillic letters, punctuation, spaces).
-        foreach (var ch in text.ToLowerInvariant())
+        // NFD + lowercase: decompose combining chars, match map's lowercase keys.
+        foreach (var ch in text.Normalize(NormalizationForm.FormD).ToLowerInvariant())
         {
             var key = ch.ToString();
             if (phonemeIdMap.TryGetValue(key, out var mapped))
             {
                 ids.AddRange(mapped);
-                ids.Add(PAD);
+                ids.AddRange(padIds);
             }
-            // Unknown characters silently skipped (consistent with Piper reference impl)
+            // Unknown chars silently skipped
         }
 
-        ids.Add(EOS);
+        ids.AddRange(eosIds);
         return [.. ids];
     }
 
