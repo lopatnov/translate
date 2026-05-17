@@ -135,6 +135,65 @@ public sealed class PiperSynthesizerTests
     }
 
     // -------------------------------------------------------------------------
+    // BuildPhonemeIdsFromText
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void BuildPhonemeIdsFromText_StartsWithBosEndsWithEos()
+    {
+        var map = new Dictionary<string, long[]>
+        {
+            ["^"] = [1L], ["_"] = [0L], ["$"] = [2L],
+            ["а"] = [10L], ["б"] = [11L],
+        };
+        var ids = PiperSynthesizer.BuildPhonemeIdsFromText("аб", map);
+        Assert.Equal(1L, ids[0]);    // BOS
+        Assert.Equal(2L, ids[^1]);   // EOS
+    }
+
+    [Fact]
+    public void BuildPhonemeIdsFromText_LowercasesInput()
+    {
+        // Map has only lowercase key "а"; uppercase "А" should be lowercased and matched.
+        var map = new Dictionary<string, long[]>
+        {
+            ["а"] = [10L],
+        };
+        var ids = PiperSynthesizer.BuildPhonemeIdsFromText("А", map);
+        // BOS(1) + PAD(0) + а(10) + PAD(0) + EOS(2)
+        Assert.Equal(new long[] { 1L, 0L, 10L, 0L, 2L }, ids);
+    }
+
+    [Fact]
+    public void BuildPhonemeIdsFromText_UnknownCharsAreSkipped()
+    {
+        // Only "а" is in the map; "б" and "в" are unknown and must be silently skipped.
+        var map = new Dictionary<string, long[]>
+        {
+            ["а"] = [10L],
+        };
+        var ids = PiperSynthesizer.BuildPhonemeIdsFromText("абв", map);
+        // BOS(1) + PAD(0) + а(10) + PAD(0) + EOS(2) — б and в absent
+        Assert.Equal(new long[] { 1L, 0L, 10L, 0L, 2L }, ids);
+    }
+
+    [Fact]
+    public void BuildPhonemeIdsFromText_NfdDecomposesCombiningChars()
+    {
+        // "ї" (U+0457) NFC decomposes to "i" (U+0069) + combining diaeresis (U+0308) in NFD.
+        // The map should have the base letter key to exercise the NFD path.
+        // Here we just verify the method does not throw on composed characters.
+        var map = new Dictionary<string, long[]>
+        {
+            ["і"] = [20L],  // simple Cyrillic і, map key in NFD form
+        };
+        // Should not throw; unknown chars skipped.
+        var ids = PiperSynthesizer.BuildPhonemeIdsFromText("ї", map);
+        Assert.Equal(1L, ids[0]);   // BOS
+        Assert.Equal(2L, ids[^1]);  // EOS
+    }
+
+    // -------------------------------------------------------------------------
     // Integration (skipped when voices are not present)
     // -------------------------------------------------------------------------
 

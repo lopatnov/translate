@@ -54,7 +54,7 @@ public sealed class FastTextDiscrepancyTests
     public void Lid176Bin_MatchesPython(string text, string pyFlores)
     {
         if (!File.Exists(Lid176BinPath))
-            return; // model not present — treated as passing (informational only)
+            Assert.Skip($"LID-176 full model not found at '{Lid176BinPath}'.");
 
         var det = FastTextLanguageDetector.Load(Lid176BinPath,
             new FastTextLanguageDetectorSettings
@@ -76,7 +76,7 @@ public sealed class FastTextDiscrepancyTests
     public void Lid176Ftz_MatchesPython(string text, string pyFlores)
     {
         if (!File.Exists(Lid176FtzPath))
-            return;
+            Assert.Skip($"LID-176 compressed model not found at '{Lid176FtzPath}'.");
 
         var det = FastTextLanguageDetector.Load(Lid176FtzPath,
             new FastTextLanguageDetectorSettings
@@ -98,7 +98,7 @@ public sealed class FastTextDiscrepancyTests
     public void Glotlid_MatchesPython(string text, string pyFlores)
     {
         if (!File.Exists(GlotlidPath))
-            return;
+            Assert.Skip($"GlotLID model not found at '{GlotlidPath}'.");
 
         var det = FastTextLanguageDetector.Load(GlotlidPath,
             new FastTextLanguageDetectorSettings

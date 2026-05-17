@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Lopatnov.Translate.Piper;
 
 namespace Lopatnov.Translate.Piper.Tests;
@@ -40,10 +41,35 @@ public sealed class EspeakPhonemizerTests
     // Stage 1 — EspeakPhonemizer: does espeak-ng produce valid IPA at all?
     // =========================================================================
 
+    /// <summary>
+    /// Checks whether espeak-ng is available on PATH by running it with --version.
+    /// Used to skip Stage 1 tests gracefully when espeak-ng is not installed.
+    /// </summary>
+    private static bool EspeakAvailable()
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo("espeak-ng", "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                UseShellExecute        = false,
+            });
+            p?.WaitForExit();
+            return p?.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Russian_ProducesNonEmptyIPA()
     {
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+
         var ipa = await EspeakPhonemizer.PhonemizeAsync(RussianText, "ru", TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(ipa),
@@ -62,6 +88,8 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Ukrainian_ProducesNonEmptyIPA()
     {
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+
         var ipa = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, "uk", TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(ipa),

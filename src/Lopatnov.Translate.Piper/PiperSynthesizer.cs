@@ -1,3 +1,5 @@
+using System.Numerics.Tensors;
+using System.Runtime.InteropServices;
 using System.Text;
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Core.Models;
@@ -42,6 +44,9 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     private readonly Timer _evictionTimer;
     private InferenceSession? _session;
     private PiperVoiceConfig? _voiceConfig;
+    // Phoneme keys sorted by length descending — computed once at model load and
+    // reused per request to avoid a per-call allocation + sort in BuildPhonemeIds.
+    private List<string>? _sortedPhonemeKeys;
     private long _lastUsedTicks;
     private int _activeInferences;
     private bool _disposed;
@@ -100,7 +105,9 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
             {
                 var ipaText = await EspeakPhonemizer.PhonemizeAsync(
                     text, config.Espeak.Voice, cancellationToken);
-                phonemeIds = BuildPhonemeIds(ipaText, config.PhonemeIdMap);
+                // Use pre-sorted keys cached at model load time to avoid
+                // a per-request allocation + OrderByDescending allocation.
+                phonemeIds = BuildPhonemeIdsCore(ipaText, config.PhonemeIdMap, _sortedPhonemeKeys!);
             }
 
             // Step 3: Resolve speaker ID (0 for single-speaker voices)
@@ -140,34 +147,39 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
 
     /// <summary>
     /// Converts raw IPA output from espeak-ng into a flat array of phoneme IDs.
-    /// BOS (<c>_</c> = 0) prepended, EOS (<c>$</c> = 2) appended.
+    /// BOS (<c>^</c> → 1) prepended, PAD (<c>_</c> → 0) between tokens, EOS (<c>$</c> → 2) appended.
     /// </summary>
+    /// <remarks>
+    /// This overload sorts the phoneme-map keys on every call (for test convenience).
+    /// Instance synthesis uses <see cref="BuildPhonemeIdsCore"/> with pre-sorted keys
+    /// cached at model-load time to avoid per-request allocations.
+    /// </remarks>
     internal static long[] BuildPhonemeIds(
         string ipaText,
         IReadOnlyDictionary<string, long[]> phonemeIdMap)
+    {
+        var sortedKeys = phonemeIdMap.Keys.OrderByDescending(k => k.Length).ToList();
+        return BuildPhonemeIdsCore(ipaText, phonemeIdMap, sortedKeys);
+    }
+
+    /// <summary>Core implementation — accepts caller-supplied sorted keys.</summary>
+    private static long[] BuildPhonemeIdsCore(
+        string ipaText,
+        IReadOnlyDictionary<string, long[]> phonemeIdMap,
+        List<string> sortedKeys)
     {
         // Piper convention (from piper1-gpl/src/piper/const.py + phoneme_ids.py):
         //   PAD = "_"  → ID 0   (word-break / padding separator)
         //   BOS = "^"  → ID 1   (beginning of sentence)
         //   EOS = "$"  → ID 2   (end of sentence)
-        //   " "        → ID 3   (space between words — NOT the separator!)
         // Reference sequence: [BOS, PAD, phoneme, PAD, phoneme, PAD, ..., EOS]
-        // The PAD immediately after BOS is required by the trained model.
         var bosIds = phonemeIdMap.TryGetValue("^", out var b) ? b : [1L];
         var eosIds = phonemeIdMap.TryGetValue("$", out var e) ? e : [2L];
         var padIds = phonemeIdMap.TryGetValue("_", out var p) ? p : [0L];
 
-        // NFD-normalise IPA output: the Piper reference phonemizer applies
-        // unicodedata.normalize("NFD", ...) before splitting into codepoints,
-        // separating combining marks (e.g. ː̪) into individual characters so
-        // they can be looked up separately in the phoneme_id_map.
+        // NFD-normalise so combining marks (e.g. ː̪) are split into separate
+        // codepoints that can each be looked up in the phoneme_id_map.
         ipaText = ipaText.Normalize(NormalizationForm.FormD);
-
-        // Greedy longest-match — try multi-char keys before single-char ones
-        // to handle combined tokens from espeak-ng 1.52.
-        var sortedKeys = phonemeIdMap.Keys
-            .OrderByDescending(k => k.Length)
-            .ToList();
 
         var ids = new List<long>();
         ids.AddRange(bosIds);   // BOS = "^"
@@ -177,7 +189,7 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         while (i < ipaText.Length)
         {
             bool matched = false;
-            foreach (var key in sortedKeys)
+            foreach (var key in sortedKeys)   // greedy longest-match
             {
                 if (i + key.Length <= ipaText.Length &&
                     ipaText.AsSpan(i, key.Length).SequenceEqual(key.AsSpan()))
@@ -312,12 +324,9 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         // the resulting audio is ~20% of maximum loudness. Peak normalisation brings the
         // loudest sample to 98% of full scale (leaving a small headroom to avoid clipping).
         const float headroom = 0.98f;
-        float peak = 0f;
-        for (int i = 0; i < pcmSamples.Length; i++)
-        {
-            var abs = Math.Abs(pcmSamples[i]);
-            if (abs > peak) peak = abs;
-        }
+        // TensorPrimitives.MaxMagnitude uses SIMD (AVX2/NEON) where available —
+        // significantly faster than a scalar loop for large audio arrays.
+        float peak = TensorPrimitives.MaxMagnitude(pcmSamples);
         float scale = peak > 1e-6f ? headroom / peak : 1f; // avoid div-by-zero on silence
 
         // Convert normalised float32 → int16 PCM
@@ -354,9 +363,12 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         bw.Write((byte)'d'); bw.Write((byte)'a'); bw.Write((byte)'t'); bw.Write((byte)'a');
         bw.Write(dataBytes);                // SubChunk2Size
 
-        // PCM samples (little-endian int16)
-        foreach (var sample in pcmShorts)
-            bw.Write(sample);
+        // Bulk-write PCM samples: reinterpret the short[] as a byte span and copy
+        // directly into the pre-allocated buffer at the header offset.
+        // WAV uses little-endian int16; MemoryMarshal.Cast preserves host byte order
+        // which is little-endian on all supported platforms (x64 / ARM).
+        bw.Flush();
+        MemoryMarshal.Cast<short, byte>(pcmShorts).CopyTo(buffer.AsSpan(headerSize));
 
         return buffer;
     }
@@ -392,6 +404,12 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
 #pragma warning restore CA1873
 
                 _voiceConfig = PiperVoiceConfig.LoadFrom(configPath);
+                // Pre-sort phoneme map keys by length descending once at load time.
+                // BuildPhonemeIdsCore uses greedy longest-match, so longer keys must
+                // be tried first. Caching avoids a per-request allocation + sort.
+                _sortedPhonemeKeys = _voiceConfig.PhonemeIdMap.Keys
+                    .OrderByDescending(k => k.Length)
+                    .ToList();
                 _session = _sessionOptions is not null
                     ? new InferenceSession(modelPath, _sessionOptions)
                     : new InferenceSession(modelPath);
@@ -430,6 +448,7 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
             _session.Dispose();
             _session = null;
             _voiceConfig = null;
+            _sortedPhonemeKeys = null;
         }
         finally
         {
