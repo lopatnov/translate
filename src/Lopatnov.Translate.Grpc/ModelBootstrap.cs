@@ -144,7 +144,7 @@ internal static class ModelBootstrap
                 continue;
             }
 
-            if (!pCfg.Type.Equals(ModelType.Piper, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(pCfg.Type, ModelType.Piper, StringComparison.OrdinalIgnoreCase))
             {
                 log.LogError(
                     "Translation:TextToAudio[{Lang}] model '{Key}' must have Type=Piper " +
@@ -208,14 +208,14 @@ internal static class ModelBootstrap
         Func<string, string> resolvePath)
     {
         // Whisper, FastText, and Piper are not ITextTranslator — registered elsewhere.
-        if (cfg.Type.Equals(ModelType.Whisper,  StringComparison.OrdinalIgnoreCase) ||
-            cfg.Type.Equals(ModelType.FastText, StringComparison.OrdinalIgnoreCase) ||
-            cfg.Type.Equals(ModelType.Piper,    StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(cfg.Type, ModelType.Whisper,  StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(cfg.Type, ModelType.FastText, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(cfg.Type, ModelType.Piper,    StringComparison.OrdinalIgnoreCase))
             return;
 
         var epLogger = sp.GetService<ILoggerFactory>()?.CreateLogger(nameof(ModelBootstrap));
 
-        if (cfg.Type.Equals(ModelType.NLLB, StringComparison.OrdinalIgnoreCase)
+        if (string.Equals(cfg.Type, ModelType.NLLB, StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(cfg.Path))
         {
             var c = cfg; var n = name;
@@ -230,7 +230,7 @@ internal static class ModelBootstrap
                 }, null, null, null, so);
             };
         }
-        else if (cfg.Type.Equals(ModelType.M2M100, StringComparison.OrdinalIgnoreCase)
+        else if (string.Equals(cfg.Type, ModelType.M2M100, StringComparison.OrdinalIgnoreCase)
                  && !string.IsNullOrWhiteSpace(cfg.Path))
         {
             var c = cfg; var n = name;
@@ -245,7 +245,7 @@ internal static class ModelBootstrap
                 }, null, null, null, so);
             };
         }
-        else if (cfg.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase)
+        else if (string.Equals(cfg.Type, ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase)
                  && !string.IsNullOrWhiteSpace(cfg.BaseUrl))
         {
             var c = cfg; var n = name;
@@ -254,7 +254,7 @@ internal static class ModelBootstrap
                 httpFac.CreateClient(n),
                 Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
         }
-        else if (cfg.Type.Equals(ModelType.Redirect, StringComparison.OrdinalIgnoreCase)
+        else if (string.Equals(cfg.Type, ModelType.Redirect, StringComparison.OrdinalIgnoreCase)
                  && !string.IsNullOrWhiteSpace(cfg.RedirectUrl))
         {
             var c = cfg; var n = name;

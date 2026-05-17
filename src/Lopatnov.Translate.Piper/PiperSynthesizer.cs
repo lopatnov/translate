@@ -117,7 +117,8 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
             }
             finally
             {
-                _inferenceLock.Release();
+                try { _inferenceLock.Release(); }
+                catch (ObjectDisposedException) { /* disposal already in progress */ }
             }
 
             // Step 5: Encode WAV
@@ -455,10 +456,11 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         while (Volatile.Read(ref _activeInferences) > 0)
             sw.SpinOnce();
 
-        // Acquire _inferenceLock to ensure RunInference has fully exited before we
-        // dispose the session (RunInference holds this lock while calling session.Run).
+        // Acquire _inferenceLock and keep it (do NOT Release before Dispose).
+        // Holding at count=0 ensures RunInference has exited, and Dispose() below
+        // signals any callers queued on WaitAsync with ObjectDisposedException so
+        // they cannot enter inference against an already-disposed session.
         _inferenceLock.Wait();
-        _inferenceLock.Release();
         _inferenceLock.Dispose();
 
         _lock.Wait();

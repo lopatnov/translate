@@ -57,7 +57,9 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
         }
         finally
         {
-            _inferenceLock.Release();
+            // Guard against ObjectDisposedException if Dispose() races with this finally.
+            try { _inferenceLock.Release(); }
+            catch (ObjectDisposedException) { /* disposal already in progress */ }
         }
     }
 
@@ -121,18 +123,17 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
         // in-flight translation is executing inside the lock. Without this, a concurrent
         // TranslateAsync finally-block calling Release() after disposal throws
         // ObjectDisposedException.
+        // Acquire the lock and keep it (do NOT Release before Dispose).
+        // Holding the lock at count=0 ensures:
+        //   1. Any in-flight TranslateAsync has already exited the lock.
+        //   2. Callers queued on WaitAsync receive ObjectDisposedException when
+        //      we call _inferenceLock.Dispose() below, so they cannot enter
+        //      inference against already-disposed ONNX sessions.
         _inferenceLock.Wait();
-        try
-        {
-            if (_ownsTokenizer) _tokenizer.Dispose();
-            if (_ownsEncoder) _encoderSession.Dispose();
-            if (_ownsDecoder) _decoderSession.Dispose();
-        }
-        finally
-        {
-            _inferenceLock.Release();
-            _inferenceLock.Dispose();
-        }
+        if (_ownsTokenizer) _tokenizer.Dispose();
+        if (_ownsEncoder) _encoderSession.Dispose();
+        if (_ownsDecoder) _decoderSession.Dispose();
+        _inferenceLock.Dispose(); // signals queued WaitAsync callers with ObjectDisposedException
     }
 
     private long RunDecoderStep(long[] decoderBuf, int decoderCount,

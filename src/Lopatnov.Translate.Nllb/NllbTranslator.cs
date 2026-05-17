@@ -53,7 +53,8 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         }
         finally
         {
-            _inferenceLock.Release();
+            try { _inferenceLock.Release(); }
+            catch (ObjectDisposedException) { /* disposal already in progress */ }
         }
     }
 
@@ -105,22 +106,13 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
 
     public void Dispose()
     {
-        // Acquire the inference lock before disposing ONNX sessions to ensure no
-        // in-flight translation is executing inside the lock. Without this, a concurrent
-        // TranslateAsync finally-block calling Release() after disposal throws
-        // ObjectDisposedException.
+        // Acquire the lock and keep it (do NOT Release before Dispose).
+        // See M2M100Translator.Dispose for the full rationale.
         _inferenceLock.Wait();
-        try
-        {
-            if (_ownsTokenizer) _tokenizer.Dispose();
-            if (_ownsEncoder) _encoderSession.Dispose();
-            if (_ownsDecoder) _decoderSession.Dispose();
-        }
-        finally
-        {
-            _inferenceLock.Release();
-            _inferenceLock.Dispose();
-        }
+        if (_ownsTokenizer) _tokenizer.Dispose();
+        if (_ownsEncoder) _encoderSession.Dispose();
+        if (_ownsDecoder) _decoderSession.Dispose();
+        _inferenceLock.Dispose();
     }
 
     private long RunDecoderStep(long[] decoderBuf, int decoderCount, DenseTensor<float> encoderHiddenState, long[] attentionMask)
