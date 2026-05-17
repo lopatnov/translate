@@ -52,11 +52,21 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
         var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
-        var translated = await lease.Translator.TranslateAsync(
-            request.Text,
-            sourceLanguage,
-            targetLanguage,
-            context.CancellationToken);
+        string translated;
+        try
+        {
+            translated = await lease.Translator.TranslateAsync(
+                request.Text,
+                sourceLanguage,
+                targetLanguage,
+                context.CancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            // Thrown by the tokenizer when a language code (e.g. nno_Latn for
+            // Norwegian Nynorsk) is not in the model's vocabulary.
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
 
         var detectedInFormat = detectedFlores != null
             ? ConvertLanguageCode(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
