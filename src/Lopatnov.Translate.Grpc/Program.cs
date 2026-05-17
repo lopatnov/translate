@@ -62,17 +62,7 @@ if (!string.IsNullOrWhiteSpace(audioToText))
             $"(found '{attCfg.Type}').");
 }
 
-foreach (var (lang, modelKey) in textToAudio)
-{
-    if (string.IsNullOrWhiteSpace(modelKey)) continue;
-    if (!rawModels.TryGetValue(modelKey, out var ttaCfg))
-        throw new InvalidOperationException(
-            $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' is not defined in Models.");
-    if (!ttaCfg.Type.Equals(ModelType.Piper, StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException(
-            $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' must have Type=Piper " +
-            $"(found '{ttaCfg.Type}').");
-}
+ValidateTextToAudioSection(textToAudio, rawModels);
 
 // --- Register named HttpClients for LibreTranslate entries ---
 foreach (var (name, cfg) in rawModels.Where(kv =>
@@ -124,3 +114,22 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => "Lopatnov.Translate gRPC service. Use a gRPC client to connect.");
 
 await app.RunAsync();
+
+// ── Local helpers ────────────────────────────────────────────────────────────
+
+static void ValidateTextToAudioSection(
+    Dictionary<string, string> textToAudio,
+    Dictionary<string, ModelConfig> rawModels)
+{
+    foreach (var (lang, modelKey) in textToAudio)
+    {
+        if (string.IsNullOrWhiteSpace(modelKey)) continue;
+        if (!rawModels.TryGetValue(modelKey, out var ttaCfg))
+            throw new InvalidOperationException(
+                $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' is not defined in Models.");
+        if (!string.Equals(ttaCfg.Type, ModelType.Piper, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' must have Type=Piper " +
+                $"(found '{ttaCfg.Type}').");
+    }
+}

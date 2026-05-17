@@ -221,10 +221,10 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
             "cuda"   => [RuntimeLibrary.Cuda, RuntimeLibrary.Cuda12, RuntimeLibrary.Cpu],
             "vulkan" => [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu],
             "coreml" => [RuntimeLibrary.CoreML, RuntimeLibrary.Cpu],
-            var unknown => throw new ArgumentException(
+            var unknown => throw new InvalidOperationException(
                 $"Unknown Whisper backend '{unknown}'. " +
-                "Valid values: auto, cpu, cuda, vulkan, coreml.",
-                nameof(WhisperOptions.Backend)),
+                "Valid values: auto, cpu, cuda, vulkan, coreml. " +
+                "Check the Models:<key>:ExecutionProvider setting in appsettings.json."),
         };
 
 #pragma warning disable CA1873 // cheap join

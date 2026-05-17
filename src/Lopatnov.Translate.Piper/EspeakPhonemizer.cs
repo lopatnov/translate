@@ -41,7 +41,10 @@ internal static class EspeakPhonemizer
         // may silently mis-encode non-ASCII characters (Cyrillic, etc.) regardless
         // of StandardInputEncoding, causing espeak-ng to fall back to English
         // phonemisation or produce garbled IPA output.
-        var tmpFile = Path.GetTempFileName();
+        // Path.GetRandomFileName() produces an unpredictable name (high-entropy GUID-like
+        // string) and does NOT create a file — WriteAllTextAsync below creates it.
+        // This avoids the predictable-temp-file vulnerability (CWE-377) of GetTempFileName().
+        var tmpFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
             await File.WriteAllTextAsync(tmpFile, text,
