@@ -15,8 +15,8 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <!-- Windows: DirectML supports Intel/AMD/NVIDIA via DX12 + falls back to CPU -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
-    <!-- Linux/macOS: CPU-only baseline; swap to OnnxRuntime.Gpu for NVIDIA CUDA -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- Linux/macOS: CUDA-enabled runtime for NVIDIA GPU; requires CUDA toolkit on host -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.26.0" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
   <ItemGroup>
