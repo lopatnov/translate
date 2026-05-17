@@ -247,5 +247,17 @@ internal static class ModelBootstrap
                 httpFac.CreateClient(n),
                 Options.Create(new LibreTranslateOptions { BaseUrl = c.BaseUrl, ApiKey = c.ApiKey }));
         }
+        else if (cfg.Type.Equals(ModelType.Redirect, StringComparison.OrdinalIgnoreCase)
+                 && !string.IsNullOrWhiteSpace(cfg.RedirectUrl))
+        {
+            var c = cfg; var n = name;
+            var detector = sp.GetRequiredService<RedirectCycleDetector>();
+            var httpAcc  = sp.GetRequiredService<IHttpContextAccessor>();
+            factories[n] = () => new GrpcRedirectTranslator(
+                c.RedirectUrl,
+                string.IsNullOrWhiteSpace(c.RedirectName) ? n : c.RedirectName,
+                detector,
+                httpAcc);
+        }
     }
 }

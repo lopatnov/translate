@@ -83,6 +83,10 @@ foreach (var (name, cfg) in rawModels.Where(kv =>
     builder.Services.AddHttpClient(name, c => c.BaseAddress = new Uri(capturedUrl));
 }
 
+// --- Redirect support ---
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<RedirectCycleDetector>();
+
 // --- Translation options ---
 builder.Services.AddOptions<TranslationOptions>()
     .Bind(builder.Configuration.GetSection("Translation"))
