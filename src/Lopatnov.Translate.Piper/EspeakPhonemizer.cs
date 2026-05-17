@@ -111,8 +111,8 @@ internal static class EspeakPhonemizer
 
                 // Observe the output tasks so they do not surface as unobserved exceptions
                 // and so the pipe buffers are flushed before the temp file is deleted.
-                try { await stdoutTask; } catch { }
-                try { await stderrTask; } catch { }
+                try { await stdoutTask; } catch (Exception ex) { _ = ex; }
+                try { await stderrTask; } catch (Exception ex) { _ = ex; }
                 throw;
             }
             var stdout = await stdoutTask;

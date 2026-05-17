@@ -9,12 +9,15 @@ namespace Lopatnov.Translate.Grpc;
 /// </summary>
 public static class OnnxExecutionProviderHelper
 {
+    private const string DirectMlProvider = "directml";
+    private const string CudaProvider     = "cuda";
+
     // Auto-detection priority per platform.
     // Each entry: (provider key, display name, append action).
     private static readonly (string Key, string Display, Action<SessionOptions>)[] AutoCandidates =
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? [("directml", "DirectML", o => o.AppendExecutionProvider_DML(0))]
-            : [("cuda",     "CUDA",     o => o.AppendExecutionProvider_CUDA())];
+            ? [(DirectMlProvider, "DirectML", o => o.AppendExecutionProvider_DML(0))]
+            : [(CudaProvider,     "CUDA",     o => o.AppendExecutionProvider_CUDA())];
 
     /// <summary>
     /// Creates a <see cref="SessionOptions"/> for the requested execution provider.
@@ -30,12 +33,12 @@ public static class OnnxExecutionProviderHelper
     {
         return (provider ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            "" or "auto"  => BuildAuto(logger),
-            "cpu"         => BuildCpu(logger),
-            "directml"    => BuildExplicit("directml", "DirectML",
-                                o => o.AppendExecutionProvider_DML(0), logger),
-            "cuda"        => BuildExplicit("cuda", "CUDA",
-                                o => o.AppendExecutionProvider_CUDA(), logger),
+            "" or "auto"    => BuildAuto(logger),
+            "cpu"           => BuildCpu(logger),
+            DirectMlProvider => BuildExplicit(DirectMlProvider, "DirectML",
+                                    o => o.AppendExecutionProvider_DML(0), logger),
+            CudaProvider    => BuildExplicit(CudaProvider, "CUDA",
+                                    o => o.AppendExecutionProvider_CUDA(), logger),
             var unknown   => throw new ArgumentException(
                                 $"Unknown ONNX execution provider '{unknown}'. " +
                                 "Valid values: auto, cpu, directml, cuda.",
@@ -47,7 +50,7 @@ public static class OnnxExecutionProviderHelper
 
     private static SessionOptions BuildAuto(ILogger? logger)
     {
-        foreach (var (key, display, append) in AutoCandidates)
+        foreach (var (_, display, append) in AutoCandidates)
         {
             var opts = new SessionOptions();
             try
@@ -61,9 +64,9 @@ public static class OnnxExecutionProviderHelper
             catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or EntryPointNotFoundException)
             {
                 opts.Dispose();
-                logger?.LogDebug(
-                    "Auto-detection: {Provider} not available ({Message}), trying next",
-                    display, ex.Message);
+                logger?.LogDebug(ex,
+                    "Auto-detection: {Provider} not available — trying next",
+                    display);
             }
         }
 
@@ -93,12 +96,11 @@ public static class OnnxExecutionProviderHelper
         }
         catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or EntryPointNotFoundException)
         {
-            logger?.LogWarning(
+            logger?.LogWarning(ex,
                 "Execution provider '{Provider}' is not available — falling back to CPU. " +
-                "Ensure Microsoft.ML.OnnxRuntime.{Suffix} is installed. Details: {Message}",
+                "Ensure Microsoft.ML.OnnxRuntime.{Suffix} is installed.",
                 key,
-                key == "directml" ? "DirectML" : "Gpu",
-                ex.Message);
+                key == DirectMlProvider ? "DirectML" : "Gpu");
         }
         return opts;
     }

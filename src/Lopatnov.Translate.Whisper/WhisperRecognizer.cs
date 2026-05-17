@@ -207,7 +207,7 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
     private WhisperFactory CreateFactory()
     {
         // Configure runtime probe order based on ExecutionProvider / Backend setting.
-        // Multiple Whisper.net.Runtime.* packages can be installed simultaneously;
+        // Multiple Whisper.net.Runtime.* packages can be installed simultaneously —
         // the library picks the first one whose native library loads successfully.
         RuntimeOptions.RuntimeLibraryOrder = _options.Backend.Trim().ToLowerInvariant() switch
         {

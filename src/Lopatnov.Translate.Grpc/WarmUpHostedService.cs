@@ -53,10 +53,11 @@ internal sealed class WarmUpHostedService : BackgroundService
         if (models.Length == 0)
             return;
 
+        var modelNames = string.Join(", ", models);
         _logger.LogInformation(
             "WarmUp: starting pre-load of {Count} model(s): {Models}",
             models.Length,
-            string.Join(", ", models));
+            modelNames);
 
         foreach (var name in models)
         {
@@ -116,15 +117,15 @@ internal sealed class WarmUpHostedService : BackgroundService
         {
             translator = _manager.Get(name);
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(
+            _logger.LogWarning(ex,
                 "WarmUp: model '{Name}' is configured but not in the allowed list — skipping", name);
             return;
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(
+            _logger.LogWarning(ex,
                 "WarmUp: model '{Name}' is not in Translation:AllowedModels — skipping", name);
             return;
         }

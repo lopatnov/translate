@@ -80,7 +80,7 @@ public sealed class EspeakPhonemizerTests
             $"espeak-ng produced English fallback '(en)' — stdin encoding bug still active? IPA: {ipa}");
 
         // ʃ (U+0283) is always present in "хорошо/что/пришёл"
-        Assert.True(ipa.Contains("ʃ"),
+        Assert.True(ipa.Contains('ʃ'),
             $"Expected Russian IPA 'ʃ' (ш/щ) but got: {ipa}");
     }
 

@@ -59,8 +59,7 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
                 $"Redirect cycle detected (request-id: {incoming}). " +
                 "Check your redirect model configuration for routing loops."));
 
-        // Re-use the upstream ID so the chain is traceable end-to-end;
-        // generate a fresh one for the first hop in the chain.
+        // Re-use the incoming ID (traceable chain) or generate a fresh one for the first hop.
         var requestId = incoming ?? Guid.NewGuid().ToString("N");
 
         // Only remove the entry from the detector in finally if we were the one
@@ -98,7 +97,7 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
         }
         finally
         {
-            if (registered) _cycleDetector.Complete(requestId);
+            _cycleDetector.Complete(requestId);
         }
     }
 

@@ -118,9 +118,23 @@ public sealed class FastTextDiscrepancyTests
 
     // ── MemberData ────────────────────────────────────────────────────────────
 
-    public static IEnumerable<object[]> Lid176Data =>
-        s_lid176.Select(c => new object[] { c.Text, c.PyFlores });
+    public static TheoryData<string, string> Lid176Data
+    {
+        get
+        {
+            var data = new TheoryData<string, string>();
+            foreach (var (text, pyFlores) in s_lid176) data.Add(text, pyFlores);
+            return data;
+        }
+    }
 
-    public static IEnumerable<object[]> GlotlidData =>
-        s_glotlid.Select(c => new object[] { c.Text, c.PyFlores });
+    public static TheoryData<string, string> GlotlidData
+    {
+        get
+        {
+            var data = new TheoryData<string, string>();
+            foreach (var (text, pyFlores) in s_glotlid) data.Add(text, pyFlores);
+            return data;
+        }
+    }
 }

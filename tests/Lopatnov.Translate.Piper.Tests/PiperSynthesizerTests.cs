@@ -8,6 +8,11 @@ namespace Lopatnov.Translate.Piper.Tests;
 /// </summary>
 public sealed class PiperSynthesizerTests
 {
+    // Reusable expected phoneme-ID arrays (CA1861: avoid inline constant arrays).
+    private static readonly long[] s_bosMapAEos   = [1L, 0L, 14L, 0L, 2L];
+    private static readonly long[] s_bosMapABEos  = [1L, 0L, 14L, 0L, 15L, 0L, 2L];
+    private static readonly long[] s_bosMapCyrEos = [1L, 0L, 10L, 0L, 2L];
+
     // -------------------------------------------------------------------------
     // Guard tests (no model or espeak needed)
     // -------------------------------------------------------------------------
@@ -84,7 +89,7 @@ public sealed class PiperSynthesizerTests
         var ids = PiperSynthesizer.BuildPhonemeIds("abc", map);
 
         // BOS(1), PAD(0), 14(a), PAD(0), EOS(2)
-        Assert.Equal(new long[] { 1L, 0L, 14L, 0L, 2L }, ids);
+        Assert.Equal(s_bosMapAEos, ids);
     }
 
     [Fact]
@@ -99,7 +104,7 @@ public sealed class PiperSynthesizerTests
         var ids = PiperSynthesizer.BuildPhonemeIds("ab", map);
 
         // BOS(1), PAD(0), a(14), PAD(0), b(15), PAD(0), EOS(2)
-        Assert.Equal(new long[] { 1L, 0L, 14L, 0L, 15L, 0L, 2L }, ids);
+        Assert.Equal(s_bosMapABEos, ids);
     }
 
     // -------------------------------------------------------------------------
@@ -161,7 +166,7 @@ public sealed class PiperSynthesizerTests
         };
         var ids = PiperSynthesizer.BuildPhonemeIdsFromText("А", map);
         // BOS(1) + PAD(0) + а(10) + PAD(0) + EOS(2)
-        Assert.Equal(new long[] { 1L, 0L, 10L, 0L, 2L }, ids);
+        Assert.Equal(s_bosMapCyrEos, ids);
     }
 
     [Fact]
