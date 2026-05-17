@@ -94,6 +94,11 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     // Maps raw_hash (0..bucket-1) → new_ngram_idx; row = _nwords + new_ngram_idx
     private readonly Dictionary<int, int>? _ngramPruneidx;
 
+    // --- end-of-sentence token row (-1 if not in vocabulary) ---
+    // fastText appends </s> to the token list during getLine() — its char-ngrams are
+    // suppressed in initNgrams() so only the word embedding contributes to hidden.
+    private readonly int _eosRow;
+
     // -------------------------------------------------------------------------
 
     private FastTextLanguageDetector(
@@ -111,6 +116,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         _output = output; _labels = labels;
         _hsTree = hsTree;
         _ngramPruneidx = ngramPruneidx;
+        _eosRow = wordToId.TryGetValue("</s>", out int eosId) ? eosId : -1;
     }
 
     // -------------------------------------------------------------------------
@@ -305,6 +311,15 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             var token = end < 0 ? remaining : remaining[..end];
             remaining = end < 0 ? default : remaining[end..];
             AddWordFeatures(token, h, ref count);
+        }
+
+        // fastText's getLine() always appends </s> (EOS) to the token list.
+        // Only the word embedding contributes — char-ngrams of </s> are suppressed
+        // in initNgrams() — so we add just the one word embedding row.
+        if (_eosRow >= 0)
+        {
+            AddRowEmbedding(_eosRow, h);
+            count++;
         }
 
         if (count == 0)

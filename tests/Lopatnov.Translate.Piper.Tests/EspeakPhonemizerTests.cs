@@ -154,7 +154,7 @@ public sealed class EspeakPhonemizerTests
         Assert.True(ids.Length > 20,
             $"Expected >20 IDs for '{RussianText}', got {ids.Length}. IPA: '{ipa}'");
 
-        Assert.Equal(0L, ids[0]);    // BOS
+        Assert.Equal(1L, ids[0]);    // BOS ("^" → 1 per piper1-gpl reference)
         Assert.Equal(2L, ids[^1]);   // EOS
     }
 
@@ -172,8 +172,8 @@ public sealed class EspeakPhonemizerTests
         Assert.True(ids.Length > 20,
             $"Expected >20 IDs for '{UkrainianText}', got {ids.Length}. IPA: '{ipa}'");
 
-        Assert.Equal(0L, ids[0]);
-        Assert.Equal(2L, ids[^1]);
+        Assert.Equal(1L, ids[0]);    // BOS ("^" → 1 per piper1-gpl reference)
+        Assert.Equal(2L, ids[^1]);   // EOS
     }
 
     // =========================================================================
@@ -198,7 +198,7 @@ public sealed class EspeakPhonemizerTests
             $"Expected >5 IDs for '{text}', got {ids.Length} " +
             "(BOS+EOS only = 2 → Unicode NFC/NFD mismatch or chars missing from map).");
 
-        Assert.Equal(0L, ids[0]);
-        Assert.Equal(2L, ids[^1]);
+        Assert.Equal(1L, ids[0]);    // BOS ("^" → 1 per piper1-gpl reference)
+        Assert.Equal(2L, ids[^1]);   // EOS
     }
 }
