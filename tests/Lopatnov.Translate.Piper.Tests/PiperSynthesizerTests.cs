@@ -197,19 +197,22 @@ public sealed class PiperSynthesizerTests
     // Integration (skipped when voices are not present)
     // -------------------------------------------------------------------------
 
-    private const string EnglishModelPath =
-        @"..\..\..\..\..\models\text-to-audio\piper-voices\en_US\en_US-joe-medium.onnx";
+    // Resolved from the test assembly folder so it works regardless of the runner's cwd.
+    private static readonly string EnglishModelPath = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+        "models", "text-to-audio", "piper-voices", "en_US", "en_US-joe-medium.onnx"));
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task SynthesizeAsync_ProducesAudioForEnglishText()
     {
-        if (!File.Exists(EnglishModelPath)) Assert.Skip(            $"Piper voice not found at '{EnglishModelPath}'. " +
+        if (!File.Exists(EnglishModelPath)) Assert.Skip(
+            $"Piper voice not found at '{EnglishModelPath}'. " +
             "Download voices to models/text-to-audio/piper-voices/ and ensure espeak-ng is installed.");
 
         var options = Options.Create(new PiperOptions
         {
-            ModelPath = Path.GetFullPath(EnglishModelPath),
+            ModelPath = EnglishModelPath,
         });
 
         using var sut = new PiperSynthesizer(options);

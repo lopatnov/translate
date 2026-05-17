@@ -111,7 +111,9 @@ internal static class ModelBootstrap
             {
                 ModelPath  = modelPath,
                 TtlMinutes = translOpts.ModelTtlMinutes,
-                Backend    = wCfg.ExecutionProvider,
+                Backend    = string.IsNullOrWhiteSpace(wCfg.ExecutionProvider)
+                    ? "auto"
+                    : wCfg.ExecutionProvider,
             }),
             log);
     }

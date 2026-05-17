@@ -15,12 +15,16 @@ public sealed class FastTextDiscrepancyTests
 {
     // ── Model paths (relative to test output bin/Debug/net10.0/) ─────────────
 
-    private static readonly string Lid176BinPath =
-        Path.GetFullPath(@"..\..\..\..\..\models\detect-lang\fasttext-language-id\lid.176.bin");
-    private static readonly string Lid176FtzPath =
-        Path.GetFullPath(@"..\..\..\..\..\models\detect-lang\fasttext-language-id\lid.176.ftz");
-    private static readonly string GlotlidPath =
-        Path.GetFullPath(@"..\..\..\..\..\models\detect-lang\glotlid\model_v3.bin");
+    // Resolved from the test assembly folder so they work regardless of the runner's cwd.
+    private static readonly string Lid176BinPath = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+        "models", "detect-lang", "fasttext-language-id", "lid.176.bin"));
+    private static readonly string Lid176FtzPath = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+        "models", "detect-lang", "fasttext-language-id", "lid.176.ftz"));
+    private static readonly string GlotlidPath = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+        "models", "detect-lang", "glotlid", "model_v3.bin"));
 
     // ── Python reference top-1 results ────────────────────────────────────────
     // Format: (inputText, expectedFlores200)

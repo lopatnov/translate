@@ -99,8 +99,20 @@ internal static class EspeakPhonemizer
             }
             catch (OperationCanceledException)
             {
-                // Kill the subprocess to avoid it becoming an orphan.
-                try { process.Kill(entireProcessTree: true); } catch { /* best-effort */ }
+                // Kill the subprocess so it does not outlive the request.
+                try
+                {
+                    if (!process.HasExited)
+                        process.Kill(entireProcessTree: true);
+                    // Wait for the process to actually exit (no cancellation — best-effort drain).
+                    await process.WaitForExitAsync(CancellationToken.None);
+                }
+                catch { /* best-effort */ }
+
+                // Observe the output tasks so they do not surface as unobserved exceptions
+                // and so the pipe buffers are flushed before the temp file is deleted.
+                try { await stdoutTask; } catch { }
+                try { await stderrTask; } catch { }
                 throw;
             }
             var stdout = await stdoutTask;
