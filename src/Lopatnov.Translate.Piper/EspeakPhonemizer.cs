@@ -57,7 +57,9 @@ internal static class EspeakPhonemizer
                     // -q    : quiet (no audio output)
                     // -v    : voice name
                     // -f    : read input from file (bypasses stdin encoding issues)
-                    Arguments              = $"--ipa -q -v {espeakVoice} -f \"{tmpFile}\"",
+                    //
+                    // Use ArgumentList (not Arguments) to avoid command-injection when
+                    // espeakVoice or tmpFile contains spaces or shell metacharacters.
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
                     UseShellExecute        = false,
@@ -66,6 +68,12 @@ internal static class EspeakPhonemizer
                 },
                 EnableRaisingEvents = false,
             };
+            process.StartInfo.ArgumentList.Add("--ipa");
+            process.StartInfo.ArgumentList.Add("-q");
+            process.StartInfo.ArgumentList.Add("-v");
+            process.StartInfo.ArgumentList.Add(espeakVoice);
+            process.StartInfo.ArgumentList.Add("-f");
+            process.StartInfo.ArgumentList.Add(tmpFile);
 
             try
             {
@@ -81,7 +89,17 @@ internal static class EspeakPhonemizer
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
+
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Kill the subprocess to avoid it becoming an orphan.
+                try { process.Kill(entireProcessTree: true); } catch { /* best-effort */ }
+                throw;
+            }
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
 

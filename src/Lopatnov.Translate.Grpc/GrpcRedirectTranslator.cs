@@ -62,7 +62,12 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
         // Re-use the upstream ID so the chain is traceable end-to-end;
         // generate a fresh one for the first hop in the chain.
         var requestId = incoming ?? Guid.NewGuid().ToString("N");
-        _cycleDetector.TryRegister(requestId);
+
+        // Only remove the entry from the detector in finally if we were the one
+        // that registered it. If TryRegister returns false (a concurrent request
+        // is already registered with this ID), calling Complete would remove that
+        // other request's active marker and weaken the cycle-detection guarantee.
+        bool registered = _cycleDetector.TryRegister(requestId);
 
         var headers = new Metadata { { RedirectIdHeader, requestId } };
         try
@@ -85,7 +90,7 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
         }
         finally
         {
-            _cycleDetector.Complete(requestId);
+            if (registered) _cycleDetector.Complete(requestId);
         }
     }
 

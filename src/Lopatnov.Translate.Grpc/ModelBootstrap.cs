@@ -100,11 +100,10 @@ internal static class ModelBootstrap
 
 #pragma warning disable CA1873 // arguments are cheap local variables
         log.LogInformation(
-            "Whisper STT '{Key}': GPU auto-select active — " +
-            "probing Cuda → Vulkan → CoreML → Cpu at first inference. " +
-            "Override with Models:{Key}:ExecutionProvider (auto|cpu|cuda|vulkan|coreml). " +
+            "Whisper STT '{Key}': GPU auto-select active (Cuda → Vulkan → CoreML → Cpu). " +
+            "Override via Models:[key]:ExecutionProvider in appsettings.json. " +
             "Loading lazily from {Path}.",
-            audioToText, audioToText, modelPath);
+            audioToText, modelPath);
 #pragma warning restore CA1873
 
         return new WhisperRecognizer(
@@ -163,13 +162,21 @@ internal static class ModelBootstrap
 #pragma warning restore CA1873
 
             SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(pCfg.ExecutionProvider, log);
-            voices[lang] = new PiperSynthesizer(
-                Options.Create(new PiperOptions
-                {
-                    ModelPath  = modelPath,
-                    TtlMinutes = translOpts.ModelTtlMinutes,
-                }),
-                log, so);
+            try
+            {
+                voices[lang] = new PiperSynthesizer(
+                    Options.Create(new PiperOptions
+                    {
+                        ModelPath  = modelPath,
+                        TtlMinutes = translOpts.ModelTtlMinutes,
+                    }),
+                    log, so);
+            }
+            catch
+            {
+                so.Dispose();
+                throw;
+            }
         }
 
         if (voices.Count == 0)

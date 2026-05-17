@@ -139,7 +139,7 @@ public sealed class PiperSynthesizerTests
     // -------------------------------------------------------------------------
 
     private const string EnglishModelPath =
-        @"..\..\..\..\..\..\models\text-to-audio\piper-voices\en_US\en_US-joe-medium.onnx";
+        @"..\..\..\..\..\models\text-to-audio\piper-voices\en_US\en_US-joe-medium.onnx";
 
     [Fact]
     [Trait("Category", "Integration")]

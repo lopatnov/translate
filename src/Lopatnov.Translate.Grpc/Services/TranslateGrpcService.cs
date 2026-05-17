@@ -253,11 +253,26 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
         // --- Step 2: Text → Text translation ---
         // Translators expect FLORES-200 codes internally.
-        // Use detected language from Whisper (BCP-47) as source if available.
+        // Prefer the language Whisper detected; fall back to the explicit request field.
+        // Guard against "auto" slipping through as a literal language code if
+        // Whisper returns an empty DetectedLanguage and the caller specified "auto".
         var detectedBcp47 = transcription.DetectedLanguage;
-        var sourceFlores = !string.IsNullOrEmpty(detectedBcp47)
-            ? ConvertLanguageCode(detectedBcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200)
-            : ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        string sourceFlores;
+        if (!string.IsNullOrEmpty(detectedBcp47))
+        {
+            sourceFlores = ConvertLanguageCode(detectedBcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200);
+        }
+        else if (!string.IsNullOrEmpty(request.SourceLanguage) &&
+                 !request.SourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            sourceFlores = ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+        }
+        else
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition,
+                "Could not determine source language: Whisper did not detect a language " +
+                "and source_language was not specified. Provide an explicit source_language."));
+        }
 
         var targetFlores = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 

@@ -26,9 +26,9 @@ public static class OnnxExecutionProviderHelper
     ///   <item>Any other value — throws <see cref="ArgumentException"/>.</item>
     /// </list>
     /// </summary>
-    public static SessionOptions BuildSessionOptions(string provider, ILogger? logger = null)
+    public static SessionOptions BuildSessionOptions(string? provider, ILogger? logger = null)
     {
-        return provider.Trim().ToLowerInvariant() switch
+        return (provider ?? string.Empty).Trim().ToLowerInvariant() switch
         {
             "" or "auto"  => BuildAuto(logger),
             "cpu"         => BuildCpu(logger),

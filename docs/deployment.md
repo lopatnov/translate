@@ -112,8 +112,8 @@ Override any `appsettings.json` setting via environment variable (double undersc
 | `Translation__AllowedModels__0` | `m2m100_418M` | First allowed translation model (array index) |
 | `Translation__ModelTtlMinutes` | `30` | Minutes idle before a loaded model is evicted from memory |
 | `Translation__TextToAudio__en` | `piper-en-US` | TTS voice key for English (ISO 639-1 code → model key) |
-| `Translation__TextToAudio__ru` | `piper-ru-RU` | TTS voice key for Russian |
-| `Translation__TextToAudio__uk` | `piper-uk-UA` | TTS voice key for Ukrainian |
+| `Translation__TextToAudio__ru` | `piper-ru-Ruslan` | TTS voice key for Russian |
+| `Translation__TextToAudio__uk` | `piper-uk-Oleksa` | TTS voice key for Ukrainian |
 | `Models__<key>__Path` | *(see appsettings.json)* | Path override for any model entry |
 | `Models__<key>__ExecutionProvider` | `""` (auto) | ONNX provider: `auto`, `cpu`, `directml`, `cuda`; Whisper: also `vulkan`, `coreml` |
 | `ASPNETCORE_HTTP_PORTS` | `5100` | gRPC server port |

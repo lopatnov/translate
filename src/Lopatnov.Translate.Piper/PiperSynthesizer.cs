@@ -36,6 +36,9 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
 
     // Lazy load + TTL eviction state (mirrors WhisperRecognizer pattern)
     private readonly SemaphoreSlim _lock = new(1, 1);
+    // Serialises ONNX inference: InferenceSession.Run() is not thread-safe under
+    // concurrent load (same issue fixed in M2M100Translator / NllbTranslator).
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
     private readonly Timer _evictionTimer;
     private InferenceSession? _session;
     private PiperVoiceConfig? _voiceConfig;
@@ -70,16 +73,19 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         float speed = 1.0f,
         CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        if (string.IsNullOrWhiteSpace(_options.ModelPath))
-            throw new InvalidOperationException(
-                "Piper model path is not configured. " +
-                "Set Translation:TextToAudio and the corresponding Models entry in appsettings.json.");
-
+        // Increment BEFORE the disposed check so Dispose() can spin-wait on
+        // _activeInferences == 0 and be certain no new inferences will start
+        // after it sets _disposed = true.
         Interlocked.Increment(ref _activeInferences);
         try
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (string.IsNullOrWhiteSpace(_options.ModelPath))
+                throw new InvalidOperationException(
+                    "Piper model path is not configured. " +
+                    "Set Translation:TextToAudio and the corresponding Models entry in appsettings.json.");
+
             var (session, config) = await GetOrCreateSessionAsync(cancellationToken);
 
             // Step 1: Phonemise text → phoneme IDs.
@@ -100,9 +106,19 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
             // Step 3: Resolve speaker ID (0 for single-speaker voices)
             var speakerId = ResolveSpeakerId(voice, config);
 
-            // Step 4: Run ONNX inference
+            // Step 4: Run ONNX inference — serialised via _inferenceLock because
+            // InferenceSession.Run() is not safe for concurrent invocations.
             var lengthScale = speed > 0f ? 1.0f / speed : 1.0f; // speed=2 → shorter → divide
-            var pcmSamples = RunInference(session, phonemeIds, speakerId, config.Inference, lengthScale);
+            float[] pcmSamples;
+            await _inferenceLock.WaitAsync(cancellationToken);
+            try
+            {
+                pcmSamples = RunInference(session, phonemeIds, speakerId, config.Inference, lengthScale);
+            }
+            finally
+            {
+                _inferenceLock.Release();
+            }
 
             // Step 5: Encode WAV
             var wavBytes = EncodeWav(pcmSamples, config.Audio.SampleRate);
@@ -430,6 +446,20 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         _disposed = true;
 
         _evictionTimer.Dispose();
+
+        // Spin until all in-flight SynthesizeAsync calls have decremented _activeInferences.
+        // Because _activeInferences is incremented BEFORE the _disposed check, setting
+        // _disposed = true above prevents new calls from proceeding past their ObjectDisposedException
+        // check; the SpinWait here drains any that had already incremented the counter.
+        var sw = new SpinWait();
+        while (Volatile.Read(ref _activeInferences) > 0)
+            sw.SpinOnce();
+
+        // Acquire _inferenceLock to ensure RunInference has fully exited before we
+        // dispose the session (RunInference holds this lock while calling session.Run).
+        _inferenceLock.Wait();
+        _inferenceLock.Release();
+        _inferenceLock.Dispose();
 
         _lock.Wait();
         try

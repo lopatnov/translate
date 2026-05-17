@@ -117,10 +117,22 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
 
     public void Dispose()
     {
-        _inferenceLock.Dispose();
-        if (_ownsTokenizer) _tokenizer.Dispose();
-        if (_ownsEncoder) _encoderSession.Dispose();
-        if (_ownsDecoder) _decoderSession.Dispose();
+        // Acquire the inference lock before disposing ONNX sessions to ensure no
+        // in-flight translation is executing inside the lock. Without this, a concurrent
+        // TranslateAsync finally-block calling Release() after disposal throws
+        // ObjectDisposedException.
+        _inferenceLock.Wait();
+        try
+        {
+            if (_ownsTokenizer) _tokenizer.Dispose();
+            if (_ownsEncoder) _encoderSession.Dispose();
+            if (_ownsDecoder) _decoderSession.Dispose();
+        }
+        finally
+        {
+            _inferenceLock.Release();
+            _inferenceLock.Dispose();
+        }
     }
 
     private long RunDecoderStep(long[] decoderBuf, int decoderCount,
