@@ -69,6 +69,14 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
         // other request's active marker and weaken the cycle-detection guarantee.
         bool registered = _cycleDetector.TryRegister(requestId);
 
+        // If registration failed the ID is already active on this server, which
+        // means the chain has looped back — abort immediately instead of forwarding
+        // a request that will either loop again or silently corrupt cycle-detection.
+        if (!registered)
+            throw new RpcException(new Status(StatusCode.FailedPrecondition,
+                $"Redirect cycle detected (duplicate request-id: {requestId}). " +
+                "Check your redirect model configuration for routing loops."));
+
         var headers = new Metadata { { RedirectIdHeader, requestId } };
         try
         {

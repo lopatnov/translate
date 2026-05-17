@@ -15,6 +15,8 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     private readonly bool _ownsTokenizer;
     private readonly bool _ownsEncoder;
     private readonly bool _ownsDecoder;
+    private readonly SessionOptions? _sessionOptions;
+    private readonly bool _ownsSessionOptions;
 
     // OnnxRuntime InferenceSession.Run is not safe for concurrent calls on the
     // same session when native state is shared (observed as 0xC0000005 crashes
@@ -39,6 +41,10 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile), sessionOptions);
         _ownsDecoder = decoderSession is null;
         _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile), sessionOptions);
+        // Own sessionOptions only when it was provided and used to construct at least one session.
+        // After session construction ONNX has copied all relevant config, so we can dispose freely.
+        _sessionOptions = sessionOptions;
+        _ownsSessionOptions = sessionOptions is not null && (_ownsEncoder || _ownsDecoder);
     }
 
     public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
@@ -112,6 +118,7 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         if (_ownsTokenizer) _tokenizer.Dispose();
         if (_ownsEncoder) _encoderSession.Dispose();
         if (_ownsDecoder) _decoderSession.Dispose();
+        if (_ownsSessionOptions) _sessionOptions!.Dispose();
         _inferenceLock.Dispose();
     }
 

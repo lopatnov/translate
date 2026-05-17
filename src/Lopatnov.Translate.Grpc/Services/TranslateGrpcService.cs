@@ -279,11 +279,18 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         string translatedText;
         using (var lease = ResolveTranslator(string.Empty)) // default model
         {
-            translatedText = await lease.Translator.TranslateAsync(
-                transcription.FullText,
-                sourceFlores,
-                targetFlores,
-                context.CancellationToken);
+            try
+            {
+                translatedText = await lease.Translator.TranslateAsync(
+                    transcription.FullText,
+                    sourceFlores,
+                    targetFlores,
+                    context.CancellationToken);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+            }
         }
 
         // --- Step 3: Text → Speech (Piper) ---
