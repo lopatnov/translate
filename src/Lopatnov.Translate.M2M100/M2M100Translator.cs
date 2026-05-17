@@ -17,6 +17,11 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
     private readonly bool _ownsEncoder;
     private readonly bool _ownsDecoder;
 
+    // OnnxRuntime InferenceSession.Run is not safe for concurrent calls on the
+    // same session when native state is shared (observed as 0xC0000005 crashes
+    // under concurrent live-translation load). Serialize with a semaphore.
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
+
     public M2M100Translator(IOptions<M2M100Options> options)
         : this(options.Value, null, null, null, null) { }
 
@@ -39,11 +44,21 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
             Path.Combine(options.Path, options.DecoderFile), sessionOptions);
     }
 
-    public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
+    public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.Run(() => Translate(text, sourceLanguage, targetLanguage, cancellationToken), cancellationToken);
+        await _inferenceLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(
+                () => Translate(text, sourceLanguage, targetLanguage, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inferenceLock.Release();
+        }
     }
 
     private string Translate(string text, string sourceLanguage, string targetLanguage,
@@ -102,6 +117,7 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
 
     public void Dispose()
     {
+        _inferenceLock.Dispose();
         if (_ownsTokenizer) _tokenizer.Dispose();
         if (_ownsEncoder) _encoderSession.Dispose();
         if (_ownsDecoder) _decoderSession.Dispose();
