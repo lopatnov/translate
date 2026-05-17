@@ -141,12 +141,11 @@ public sealed class PiperSynthesizerTests
     private const string EnglishModelPath =
         @"..\..\..\..\..\..\models\text-to-audio\piper-voices\en_US\en_US-joe-medium.onnx";
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task SynthesizeAsync_ProducesAudioForEnglishText()
     {
-        Skip.If(!File.Exists(EnglishModelPath),
-            $"Piper voice not found at '{EnglishModelPath}'. " +
+        if (!File.Exists(EnglishModelPath)) Assert.Skip(            $"Piper voice not found at '{EnglishModelPath}'. " +
             "Download voices to models/text-to-audio/piper-voices/ and ensure espeak-ng is installed.");
 
         var options = Options.Create(new PiperOptions

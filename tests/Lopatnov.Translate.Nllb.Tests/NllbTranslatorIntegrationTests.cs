@@ -1,4 +1,3 @@
-using Xunit.Abstractions;
 
 namespace Lopatnov.Translate.Nllb.Tests;
 
@@ -36,12 +35,12 @@ public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
         { "Спасибо за внимание.",       "rus_Cyrl", "eng_Latn", ["thank", "attention"] },
     };
 
-    [SkippableTheory]
+    [Theory]
     [MemberData(nameof(TranslationCases))]
     public async Task TranslateAsync_ProducesExpectedEnglishOutput(
         string source, string srcLang, string tgtLang, string[] expectedKeywords)
     {
-        Skip.If(!Directory.Exists(ModelPath), $"NLLB model not found at '{ModelPath}'. Run scripts/download-models.ps1.");
+        if (!Directory.Exists(ModelPath)) Assert.Skip($"NLLB model not found at '{ModelPath}'. Run scripts/download-models.ps1.");
 
         var options = new NllbOptions { Path = ModelPath, MaxTokens = 128, BeamSize = 1 };
         using var translator = new NllbTranslator(options, null, null, null);

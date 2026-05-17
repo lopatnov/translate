@@ -54,11 +54,10 @@ public sealed class WhisperRecognizerIntegrationTests
         return ms.ToArray();
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task TranscribeAsync_SilentAudio_ReturnsResultWithoutCrashing()
     {
-        Skip.If(!File.Exists(ModelPath),
-            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
+        if (!File.Exists(ModelPath)) Assert.Skip(            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
 
         var options  = Options.Create(new WhisperOptions { ModelPath = ModelPath });
         using var sut = new WhisperRecognizer(options);
@@ -73,11 +72,10 @@ public sealed class WhisperRecognizerIntegrationTests
         Assert.NotNull(result.FullText);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task TranscribeAsync_CancellationRequested_ThrowsOrCompletes()
     {
-        Skip.If(!File.Exists(ModelPath),
-            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
+        if (!File.Exists(ModelPath)) Assert.Skip(            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
 
         var options  = Options.Create(new WhisperOptions { ModelPath = ModelPath });
         using var sut = new WhisperRecognizer(options);

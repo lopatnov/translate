@@ -40,7 +40,7 @@ public sealed class EspeakPhonemizerTests
     // Stage 1 — EspeakPhonemizer: does espeak-ng produce valid IPA at all?
     // =========================================================================
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Russian_ProducesNonEmptyIPA()
     {
@@ -58,7 +58,7 @@ public sealed class EspeakPhonemizerTests
             $"Expected Russian IPA 'ʃ' (ш/щ) but got: {ipa}");
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Ukrainian_ProducesNonEmptyIPA()
     {
@@ -78,12 +78,11 @@ public sealed class EspeakPhonemizerTests
     // Stage 2 — Phoneme map coverage: are all IPA chars in the model's map?
     // =========================================================================
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Russian_RuslanMap_AllIPACharsFound()
     {
-        Skip.If(!File.Exists(RuslanJsonPath),
-            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
+        if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
@@ -97,12 +96,11 @@ public sealed class EspeakPhonemizerTests
             $"Full IPA: {ipa}  |  Map size: {config.PhonemeIdMap.Count}");
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Russian_IrinaMap_AllIPACharsFound()
     {
-        Skip.If(!File.Exists(IrinaJsonPath),
-            $"Irina sidecar not found at: {Path.GetFullPath(IrinaJsonPath)}");
+        if (!File.Exists(IrinaJsonPath)) Assert.Skip(            $"Irina sidecar not found at: {Path.GetFullPath(IrinaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(IrinaJsonPath));
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
@@ -116,12 +114,11 @@ public sealed class EspeakPhonemizerTests
             $"Full IPA: {ipa}");
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Ukrainian_OleksaMap_AllIPACharsFound()
     {
-        Skip.If(!File.Exists(OleksaJsonPath),
-            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
+        if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice);
@@ -139,12 +136,11 @@ public sealed class EspeakPhonemizerTests
     // Stage 3 — BuildPhonemeIds: do we get a non-trivial ID sequence?
     // =========================================================================
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage3_PhonemeIds_Russian_Ruslan_ProducesReasonableCount()
     {
-        Skip.If(!File.Exists(RuslanJsonPath),
-            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
+        if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
@@ -158,12 +154,11 @@ public sealed class EspeakPhonemizerTests
         Assert.Equal(2L, ids[^1]);   // EOS
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task Stage3_PhonemeIds_Ukrainian_Oleksa_ProducesReasonableCount()
     {
-        Skip.If(!File.Exists(OleksaJsonPath),
-            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
+        if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice);
@@ -180,12 +175,11 @@ public sealed class EspeakPhonemizerTests
     // Stage 4 — phoneme_type=text path (uk_UA-ukrainian_tts-medium)
     // =========================================================================
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "Integration")]
     public void Stage4_PhonemeIdsFromText_Ukrainian_MapsKnownChars()
     {
-        Skip.If(!File.Exists(UkMediumJsonPath),
-            $"UK-medium sidecar not found at: {Path.GetFullPath(UkMediumJsonPath)}");
+        if (!File.Exists(UkMediumJsonPath)) Assert.Skip(            $"UK-medium sidecar not found at: {Path.GetFullPath(UkMediumJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(UkMediumJsonPath));
 
