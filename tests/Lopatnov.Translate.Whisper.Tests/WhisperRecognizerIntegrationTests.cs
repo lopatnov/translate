@@ -63,7 +63,7 @@ public sealed class WhisperRecognizerIntegrationTests
         using var sut = new WhisperRecognizer(options);
 
         var wav    = BuildSilentWav(durationSeconds: 1.0);
-        var result = await sut.TranscribeAsync(wav, "auto");
+        var result = await sut.TranscribeAsync(wav, "auto", TestContext.Current.CancellationToken);
 
         // A silent clip may produce empty text — that's fine.
         // The important thing is that the model loaded and returned a valid result.

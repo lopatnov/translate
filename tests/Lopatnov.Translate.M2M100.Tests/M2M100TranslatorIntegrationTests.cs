@@ -48,7 +48,7 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
         };
         using var translator = new M2M100Translator(options, null, null, null);
 
-        var result = await translator.TranslateAsync(source, srcLang, tgtLang);
+        var result = await translator.TranslateAsync(source, srcLang, tgtLang, TestContext.Current.CancellationToken);
         output.WriteLine($"{source} → {result}");
 
         Assert.False(string.IsNullOrWhiteSpace(result), $"Empty translation for: {source}");

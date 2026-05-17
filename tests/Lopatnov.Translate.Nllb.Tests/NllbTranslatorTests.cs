@@ -47,7 +47,7 @@ public sealed class NllbTranslatorTests
         var options = new NllbOptions { MaxTokens = 10 };
         using var translator = new NllbTranslator(options, new FakeNllbTokenizer(), encoderMock.Object, decoderMock.Object);
 
-        await translator.TranslateAsync("hello", "eng_Latn", "ukr_Cyrl");
+        await translator.TranslateAsync("hello", "eng_Latn", "ukr_Cyrl", TestContext.Current.CancellationToken);
 
         encoderMock.Verify(s => s.Run(
             It.Is<IReadOnlyCollection<NamedOnnxValue>>(

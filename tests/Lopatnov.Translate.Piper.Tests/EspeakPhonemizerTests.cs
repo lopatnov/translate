@@ -44,7 +44,7 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Russian_ProducesNonEmptyIPA()
     {
-        var ipa = await EspeakPhonemizer.PhonemizeAsync(RussianText, "ru");
+        var ipa = await EspeakPhonemizer.PhonemizeAsync(RussianText, "ru", TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(ipa),
             "espeak-ng returned empty IPA for Russian text — is espeak-ng installed?");
@@ -62,7 +62,7 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage1_Espeak_Ukrainian_ProducesNonEmptyIPA()
     {
-        var ipa = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, "uk");
+        var ipa = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, "uk", TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(ipa),
             "espeak-ng returned empty IPA for Ukrainian text.");
@@ -85,7 +85,7 @@ public sealed class EspeakPhonemizerTests
         if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
-        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
+        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
             .Where(c => c is not ('\r' or '\n') && !config.PhonemeIdMap.ContainsKey(c.ToString()))
@@ -103,7 +103,7 @@ public sealed class EspeakPhonemizerTests
         if (!File.Exists(IrinaJsonPath)) Assert.Skip(            $"Irina sidecar not found at: {Path.GetFullPath(IrinaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(IrinaJsonPath));
-        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
+        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
             .Where(c => c is not ('\r' or '\n') && !config.PhonemeIdMap.ContainsKey(c.ToString()))
@@ -121,7 +121,7 @@ public sealed class EspeakPhonemizerTests
         if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
-        var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice);
+        var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
             .Where(c => c is not ('\r' or '\n') && !config.PhonemeIdMap.ContainsKey(c.ToString()))
@@ -143,7 +143,7 @@ public sealed class EspeakPhonemizerTests
         if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
-        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice);
+        var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
         var ids    = PiperSynthesizer.BuildPhonemeIds(ipa, config.PhonemeIdMap);
 
         // "Хорошо что ты пришёл" → ~20 phonemes × 2 (phoneme + PAD) + BOS + EOS ≥ 42
@@ -161,7 +161,7 @@ public sealed class EspeakPhonemizerTests
         if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
 
         var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
-        var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice);
+        var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
         var ids    = PiperSynthesizer.BuildPhonemeIds(ipa, config.PhonemeIdMap);
 
         Assert.True(ids.Length > 20,

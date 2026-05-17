@@ -23,7 +23,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal("[Hello]", doc.RootElement.GetProperty("greeting").GetString());
@@ -38,7 +38,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         var auth = doc.RootElement.GetProperty("auth");
@@ -54,7 +54,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
@@ -70,7 +70,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal(42, doc.RootElement.GetProperty("count").GetInt32());
@@ -94,7 +94,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (_, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, count);
         translator.Verify(
@@ -109,7 +109,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         translator.Verify(
             t => t.TranslateAsync("Hello", "eng_Latn", "ukr_Cyrl", It.IsAny<CancellationToken>()),
@@ -120,7 +120,7 @@ public sealed class JsonLocalizationTranslatorTests
     public async Task TranslateAsync_EmptyObject_ReturnsZeroCount()
     {
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            "{}", Translator().Object, "eng_Latn", "ukr_Cyrl");
+            "{}", Translator().Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Object, doc.RootElement.ValueKind);
@@ -134,7 +134,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator(t => t.ToUpper());
 
         var (json, _) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "deu_Latn");
+            input, translator.Object, "eng_Latn", "deu_Latn", cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal("DEEP", doc.RootElement
@@ -148,7 +148,7 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (_, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl");
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, count);
     }
@@ -182,7 +182,8 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal("Увійти", doc.RootElement.GetProperty("signIn").GetString());
@@ -205,7 +206,8 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (_, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, count);
         translator.Verify(
@@ -221,7 +223,8 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal("Глибоко", doc.RootElement
@@ -238,7 +241,8 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing);
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", existingTranslation: existing,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
@@ -256,7 +260,8 @@ public sealed class JsonLocalizationTranslatorTests
     {
         await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() =>
             JsonLocalizationTranslator.TranslateAsync(
-                badJson, Translator().Object, "eng_Latn", "ukr_Cyrl"));
+                badJson, Translator().Object, "eng_Latn", "ukr_Cyrl",
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -267,7 +272,8 @@ public sealed class JsonLocalizationTranslatorTests
         var translator = Translator();
 
         var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
-            input, translator.Object, "eng_Latn", "ukr_Cyrl", context: context);
+            input, translator.Object, "eng_Latn", "ukr_Cyrl", context: context,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var doc = JsonDocument.Parse(json);
         Assert.Equal("[Sign in]", doc.RootElement.GetProperty("signIn").GetString());

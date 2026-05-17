@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Lopatnov.Translate.Core.LanguageDetectors;
 
 namespace Lopatnov.Translate.Core.Tests;
@@ -7,7 +8,10 @@ namespace Lopatnov.Translate.Core.Tests;
 [AttributeUsage(AttributeTargets.Method)]
 internal sealed class IntegrationFactAttribute : FactAttribute
 {
-    public IntegrationFactAttribute()
+    public IntegrationFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = 0)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!File.Exists(FastTextDetectorFixture.ModelPath))
             Skip = $"GlotLID model not found at '{FastTextDetectorFixture.ModelPath}'";
@@ -17,7 +21,10 @@ internal sealed class IntegrationFactAttribute : FactAttribute
 [AttributeUsage(AttributeTargets.Method)]
 internal sealed class IntegrationTheoryAttribute : TheoryAttribute
 {
-    public IntegrationTheoryAttribute()
+    public IntegrationTheoryAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = 0)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!File.Exists(FastTextDetectorFixture.ModelPath))
             Skip = $"GlotLID model not found at '{FastTextDetectorFixture.ModelPath}'";
@@ -27,7 +34,10 @@ internal sealed class IntegrationTheoryAttribute : TheoryAttribute
 [AttributeUsage(AttributeTargets.Method)]
 internal sealed class Lid176FactAttribute : FactAttribute
 {
-    public Lid176FactAttribute()
+    public Lid176FactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = 0)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!File.Exists(FastTextLid176Fixture.ModelPath))
             Skip = $"LID-176 model not found at '{FastTextLid176Fixture.ModelPath}'";
@@ -37,7 +47,10 @@ internal sealed class Lid176FactAttribute : FactAttribute
 [AttributeUsage(AttributeTargets.Method)]
 internal sealed class Lid176TheoryAttribute : TheoryAttribute
 {
-    public Lid176TheoryAttribute()
+    public Lid176TheoryAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = 0)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!File.Exists(FastTextLid176Fixture.ModelPath))
             Skip = $"LID-176 model not found at '{FastTextLid176Fixture.ModelPath}'";

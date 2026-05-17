@@ -15,7 +15,7 @@ public sealed class WhisperRecognizerTests
         using var sut = new WhisperRecognizer(options);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.TranscribeAsync([], "auto"));
+            () => sut.TranscribeAsync([], "auto", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public sealed class WhisperRecognizerTests
         using var sut = new WhisperRecognizer(options);
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => sut.TranscribeAsync([], "auto"));
+            () => sut.TranscribeAsync([], "auto", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -36,6 +36,6 @@ public sealed class WhisperRecognizerTests
         sut.Dispose();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => sut.TranscribeAsync([], "auto"));
+            () => sut.TranscribeAsync([], "auto", TestContext.Current.CancellationToken));
     }
 }

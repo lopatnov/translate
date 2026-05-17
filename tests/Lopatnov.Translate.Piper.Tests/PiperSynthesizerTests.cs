@@ -19,7 +19,7 @@ public sealed class PiperSynthesizerTests
         using var sut = new PiperSynthesizer(options);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.SynthesizeAsync("hello", "en"));
+            () => sut.SynthesizeAsync("hello", "en", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class PiperSynthesizerTests
         sut.Dispose();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => sut.SynthesizeAsync("hello", "en"));
+            () => sut.SynthesizeAsync("hello", "en", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     // -------------------------------------------------------------------------
@@ -155,7 +155,7 @@ public sealed class PiperSynthesizerTests
 
         using var sut = new PiperSynthesizer(options);
 
-        var result = await sut.SynthesizeAsync("Hello, world!", "en");
+        var result = await sut.SynthesizeAsync("Hello, world!", "en", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.True(result.AudioData.Length > 1000, "Expected non-trivial audio output");

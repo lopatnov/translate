@@ -45,7 +45,7 @@ public sealed class NllbTranslatorIntegrationTests(ITestOutputHelper output)
         var options = new NllbOptions { Path = ModelPath, MaxTokens = 128, BeamSize = 1 };
         using var translator = new NllbTranslator(options, null, null, null);
 
-        var result = await translator.TranslateAsync(source, srcLang, tgtLang);
+        var result = await translator.TranslateAsync(source, srcLang, tgtLang, TestContext.Current.CancellationToken);
         output.WriteLine($"{source} → {result}");
 
         Assert.False(string.IsNullOrWhiteSpace(result), $"Empty translation for: {source}");
