@@ -38,6 +38,9 @@ var translationSection = builder.Configuration.GetSection("Translation");
 var defaultModel  = translationSection["DefaultModel"]  ?? string.Empty;
 var audioToText   = translationSection["AudioToText"]   ?? string.Empty;
 var allowedModels = translationSection.GetSection("AllowedModels").Get<string[]>() ?? [];
+var textToAudio   = translationSection.GetSection("TextToAudio")
+    .GetChildren()
+    .ToDictionary(s => s.Key, s => s.Value ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
 if (!string.IsNullOrWhiteSpace(defaultModel) && !rawModels.ContainsKey(defaultModel))
     throw new InvalidOperationException(
@@ -59,6 +62,8 @@ if (!string.IsNullOrWhiteSpace(audioToText))
             $"(found '{attCfg.Type}').");
 }
 
+ValidateTextToAudioSection(textToAudio, rawModels);
+
 // --- Register named HttpClients for LibreTranslate entries ---
 foreach (var (name, cfg) in rawModels.Where(kv =>
     kv.Value.Type.Equals(ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase) &&
@@ -67,6 +72,10 @@ foreach (var (name, cfg) in rawModels.Where(kv =>
     var capturedUrl = cfg.BaseUrl;
     builder.Services.AddHttpClient(name, c => c.BaseAddress = new Uri(capturedUrl));
 }
+
+// --- Redirect support ---
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<RedirectCycleDetector>();
 
 // --- Translation options ---
 builder.Services.AddOptions<TranslationOptions>()
@@ -86,9 +95,16 @@ builder.Services.AddSingleton<Lazy<ILanguageDetector>>(sp =>
 builder.Services.AddSingleton<ISpeechRecognizer>(sp =>
     ModelBootstrap.CreateSpeechRecognizer(sp, audioToText, rawModels, ResolvePath));
 
+// --- Speech synthesizer (Piper): one voice per language, lazy load + TTL, or NullSpeechSynthesizer ---
+builder.Services.AddSingleton<ISpeechSynthesizer>(sp =>
+    ModelBootstrap.CreateSpeechSynthesizer(sp, textToAudio, rawModels, ResolvePath));
+
 // --- ModelSessionManager: lazy init + TTL eviction (text translation only) ---
 builder.Services.AddSingleton<ModelSessionManager>(sp =>
     ModelBootstrap.BuildSessionManager(sp, rawModels, ResolvePath));
+
+// --- Model warm-up at startup (config: Translation:WarmUp) ---
+builder.Services.AddHostedService<WarmUpHostedService>();
 
 var app = builder.Build();
 
@@ -98,3 +114,22 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => "Lopatnov.Translate gRPC service. Use a gRPC client to connect.");
 
 await app.RunAsync();
+
+// ── Local helpers ────────────────────────────────────────────────────────────
+
+static void ValidateTextToAudioSection(
+    Dictionary<string, string> textToAudio,
+    Dictionary<string, ModelConfig> rawModels)
+{
+    foreach (var (lang, modelKey) in textToAudio)
+    {
+        if (string.IsNullOrWhiteSpace(modelKey)) continue;
+        if (!rawModels.TryGetValue(modelKey, out var ttaCfg))
+            throw new InvalidOperationException(
+                $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' is not defined in Models.");
+        if (!string.Equals(ttaCfg.Type, ModelType.Piper, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Configuration error: Translation:TextToAudio[{lang}] '{modelKey}' must have Type=Piper " +
+                $"(found '{ttaCfg.Type}').");
+    }
+}

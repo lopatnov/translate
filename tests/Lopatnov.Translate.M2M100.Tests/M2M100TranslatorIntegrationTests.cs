@@ -1,4 +1,3 @@
-using Xunit.Abstractions;
 
 namespace Lopatnov.Translate.M2M100.Tests;
 
@@ -33,13 +32,12 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
         { "Спасибо за внимание.",          "rus_Cyrl", "eng_Latn", ["thank", "attention"] },
     };
 
-    [SkippableTheory]
+    [Theory]
     [MemberData(nameof(TranslationCases))]
     public async Task TranslateAsync_ProducesExpectedEnglishOutput(
         string source, string srcLang, string tgtLang, string[] expectedKeywords)
     {
-        Skip.If(!Directory.Exists(ModelPath),
-            $"M2M-100 model not found at '{ModelPath}'. " +
+        if (!Directory.Exists(ModelPath)) Assert.Skip(            $"M2M-100 model not found at '{ModelPath}'. " +
             $"Download with: huggingface-cli download lopatnov/m2m100_418M-onnx --local-dir {ModelPath}");
 
         var options = new M2M100Options
@@ -50,7 +48,7 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
         };
         using var translator = new M2M100Translator(options, null, null, null);
 
-        var result = await translator.TranslateAsync(source, srcLang, tgtLang);
+        var result = await translator.TranslateAsync(source, srcLang, tgtLang, TestContext.Current.CancellationToken);
         output.WriteLine($"{source} → {result}");
 
         Assert.False(string.IsNullOrWhiteSpace(result), $"Empty translation for: {source}");

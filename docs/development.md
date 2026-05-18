@@ -15,6 +15,8 @@
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - At least one translation model downloaded — see [docs/models.md](models.md)
 - *(Optional)* A Whisper model for STT — see [Whisper](models.md#whisper)
+- *(Optional)* Piper voices for TTS — see [Piper TTS](models.md#piper-tts)
+- *(Optional, required for TTS)* **espeak-ng** installed on PATH — `apt-get install -y espeak-ng` / [Windows MSI](https://github.com/espeak-ng/espeak-ng/releases) / `brew install espeak-ng`
 
 ---
 
@@ -64,6 +66,15 @@ $body = "{`"audio_data`": `"$audioBase64`", `"language`": `"auto`"}"
 grpcurl -plaintext -d $body localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 ```
 
+**Synthesize speech (bash):**
+
+```bash
+grpcurl -plaintext \
+  -d '{"text": "Hello, world!", "language": "en"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/SynthesizeSpeech \
+  | jq -r '.audioData' | base64 -d > output.wav
+```
+
 Full API examples: [docs/api.md](api.md).
 
 ---
@@ -80,8 +91,10 @@ Override any `appsettings.json` setting via environment variable (double undersc
 | `Translation__AudioToText` | `whisper-small` | STT model key; set to `""` to disable |
 | `Translation__AutoDetect` | `lid-176-ftz` | Language detection model key |
 | `Translation__ModelTtlMinutes` | `30` | Minutes idle before model is unloaded |
+| `Translation__TextToAudio__en` | `piper-en-US` | TTS voice key for English |
 | `Models__m2m100_418M__Path` | `../../models/translate/m2m100_418M` | Path override for M2M-100 418M |
 | `Models__whisper-small__Path` | `../../models/audio-to-text/whisper.cpp/ggml-small.bin` | Path override for Whisper small |
+| `Models__piper-en-US__Path` | `../../models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx` | Path override for Piper English voice |
 
 All `Models__<key>__Path` variables follow the same pattern. See [docs/models.md](models.md) for all model keys.
 
@@ -105,7 +118,8 @@ dotnet test --filter "Category!=Integration"
 | `Nllb.Tests` | `NllbTokenizer` encode/decode round-trip |
 | `M2M100.Tests` | `M2M100Tokenizer` — language token IDs, BPE encode/decode |
 | `Whisper.Tests` | `WhisperRecognizer.ResampleToWhisperFormat` (unit), lazy/dispose guards |
-| `Grpc.Tests` | `TranslateGrpcService` — model dispatch, allowlist, auto-detect, language format conversion |
+| `Piper.Tests` | `BuildPhonemeIds`, `BuildPhonemeIdsFromText`, WAV encoder, guard tests |
+| `Grpc.Tests` | `TranslateGrpcService` — model dispatch, allowlist, auto-detect, language format conversion, GPU provider selection |
 
 ### Integration tests
 
@@ -123,6 +137,7 @@ dotnet test --filter "Category=Integration"
 | `Nllb.Tests` | NLLB-200 600M | Ukrainian→English, Russian→English translation |
 | `M2M100.Tests` | M2M-100 418M | Ukrainian→English, Russian→English translation; tokenizer round-trips |
 | `Whisper.Tests` | `ggml-small.bin` | Silent audio pipeline (model load, inference, result structure) |
+| `Piper.Tests` | `en_US-joe-medium.onnx` + espeak-ng | Phonemization pipeline (espeak-ng IPA → phoneme IDs) and synthesis |
 
 Override model paths with environment variables if your models are in a non-default location:
 

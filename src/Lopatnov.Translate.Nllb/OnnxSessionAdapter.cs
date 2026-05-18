@@ -9,8 +9,10 @@ public sealed class OnnxSessionAdapter : IOnnxSession
 {
     private readonly InferenceSession _session;
 
-    public OnnxSessionAdapter(string modelPath)
-        => _session = new InferenceSession(modelPath);
+    public OnnxSessionAdapter(string modelPath, SessionOptions? sessionOptions = null)
+        => _session = sessionOptions is not null
+            ? new InferenceSession(modelPath, sessionOptions)
+            : new InferenceSession(modelPath);
 
     public void Run(
         IReadOnlyCollection<NamedOnnxValue> inputs,

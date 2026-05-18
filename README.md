@@ -7,7 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/lopatnov/translate)](https://github.com/lopatnov/translate/issues)
 [![GitHub stars](https://img.shields.io/github/stars/lopatnov/translate?style=social)](https://github.com/lopatnov/translate/stargazers)
 
-A self-hosted gRPC service for text translation, language detection, and speech-to-text transcription. All models run locally — no cloud dependencies. Multiple models can be configured by name and selected per request.
+A self-hosted gRPC service for speech-to-text transcription, text translation, text-to-speech synthesis, and end-to-end speech-to-speech translation. All models run locally — no cloud dependencies. Multiple models can be configured by name and selected per request. Optional GPU/NPU acceleration via DirectML (Windows) or CUDA (Linux).
 
 ---
 
@@ -22,23 +22,28 @@ cd translate
 
 ### 2. Download models
 
-Download the default translation and STT models:
-
 ```bash
-# Translation model — see docs/models.md for all options
+# Translation model (MIT, 100 languages)
 huggingface-cli download lopatnov/m2m100_418M-onnx --local-dir ./models/translate/m2m100_418M
 
-# Speech-to-text (Whisper small, ~500 MB)
+# Speech-to-text — Whisper small (~500 MB, MIT)
 huggingface-cli download lopatnov/whisper.cpp ggml-small.bin --local-dir ./models/audio-to-text/whisper.cpp
+
+# Text-to-speech — Piper English voice (MIT)
+huggingface-cli download lopatnov/piper-voices \
+  en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
 ```
 
-See [docs/models.md](docs/models.md) for all available models and configuration.
+See [docs/models.md](docs/models.md) for all available models, voices, and language detection options.
 
 ### 3. Start
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
 ```
+
+The gRPC server starts on port **5100**.
 
 ### 4. Translate text
 
@@ -51,18 +56,42 @@ grpcurl -plaintext \
 ### 5. Transcribe audio
 
 ```bash
-# Linux
+# Linux (GNU base64)
 grpcurl -plaintext \
   -d "{\"audio_data\": \"$(base64 -w0 my-audio.wav)\", \"language\": \"auto\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 
-# macOS (base64 has no -w flag)
+# macOS (BSD base64 has no -w flag)
 grpcurl -plaintext \
   -d "{\"audio_data\": \"$(base64 my-audio.wav | tr -d '\n')\", \"language\": \"auto\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+
+# PowerShell (Windows)
+$b = [Convert]::ToBase64String([IO.File]::ReadAllBytes("my-audio.wav"))
+grpcurl -plaintext -d "{`"audio_data`":`"$b`",`"language`":`"auto`"}" `
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 ```
 
-The gRPC server runs on port `5100`. See [docs/api.md](docs/api.md) for the full API reference.
+### 6. Synthesize speech
+
+```bash
+grpcurl -plaintext \
+  -d '{"text":"Hello, world!","language":"en"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/SynthesizeSpeech \
+  | jq -r '.audioData' | base64 -d > output.wav
+```
+
+### 7. Speech-to-speech translation
+
+```bash
+# Transcribe + translate + synthesize in one call
+grpcurl -plaintext \
+  -d "{\"audio_data\": \"$(base64 -w0 speech.wav)\", \"source_language\": \"uk\", \"target_language\": \"en\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateAudio \
+  | jq -r '.translatedAudio' | base64 -d > translated.wav
+```
+
+See [docs/api.md](docs/api.md) for the full API reference.
 
 ---
 
@@ -86,7 +115,8 @@ src/
   Lopatnov.Translate.Nllb/           # NLLB-200 translator (ONNX Runtime)
   Lopatnov.Translate.M2M100/         # M2M-100 translator (ONNX Runtime)
   Lopatnov.Translate.Whisper/        # Whisper speech-to-text (Whisper.net)
-  Lopatnov.Translate.LibreTranslate/ # LibreTranslate HTTP client
+  Lopatnov.Translate.Piper/          # Piper text-to-speech (ONNX Runtime + espeak-ng)
+  Lopatnov.Translate.LibreTranslate/ # LibreTranslate HTTP client (optional)
 
 tests/
   Lopatnov.Translate.Grpc.Tests/     # service dispatch, model session manager
@@ -94,12 +124,18 @@ tests/
   Lopatnov.Translate.Nllb.Tests/     # tokenizer, translator, integration
   Lopatnov.Translate.M2M100.Tests/   # tokenizer, translator, integration
   Lopatnov.Translate.Whisper.Tests/  # audio resampling, recognizer, integration
+  Lopatnov.Translate.Piper.Tests/    # phonemizer, synthesizer, integration
 
 models/                              # gitignored — populate via huggingface-cli (see docs/models.md)
   translate/                         # M2M-100, NLLB ONNX files
   detect-lang/                       # FastText LID-176, GlotLID
   audio-to-text/                     # Whisper ggml files
   text-to-audio/                     # Piper voice files
+
+clients/
+  translate-angular/                 # Angular web UI (7 pages: translate, detect, localize,
+                                     #   transcribe, synthesize, speech-to-speech, live)
+  translate-mcp/                     # MCP server — integrates the service as an AI tool
 
 docker/
   Dockerfile

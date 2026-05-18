@@ -14,6 +14,8 @@ Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](../src/Lopa
 - [TranslateLocalization](#translatelocalization)
 - [DetectLanguage](#detectlanguage)
 - [TranscribeAudio](#transcribeaudio)
+- [SynthesizeSpeech](#synthesizespeech)
+- [TranslateAudio](#translateaudio)
 - [GetCapabilities](#getcapabilities)
 - [Error codes](#error-codes)
 
@@ -38,13 +40,15 @@ Unknown or unrecognised codes are returned unchanged regardless of format.
 
 ## RPCs
 
-| RPC                     | Description                                    |
-| ----------------------- | ---------------------------------------------- |
-| `TranslateText`         | Translate a text string                        |
-| `TranslateLocalization` | Translate all strings in a JSON i18n file      |
-| `DetectLanguage`        | Detect the language of a text string           |
-| `TranscribeAudio`       | Transcribe speech from a WAV file              |
-| `GetCapabilities`       | List available models and service capabilities |
+| RPC                     | Description                                                      |
+| ----------------------- | ---------------------------------------------------------------- |
+| `TranslateText`         | Translate a text string                                          |
+| `TranslateLocalization` | Translate all strings in a JSON i18n file                        |
+| `DetectLanguage`        | Detect the language of a text string                             |
+| `TranscribeAudio`       | Transcribe speech from a WAV file to text (STT)                  |
+| `SynthesizeSpeech`      | Synthesize text to a WAV audio file (TTS)                        |
+| `TranslateAudio`        | End-to-end speech-to-speech: STT → translate → TTS in one call  |
+| `GetCapabilities`       | List available models, voices, and service capabilities          |
 
 ---
 
@@ -271,22 +275,159 @@ grpcurl -plaintext \
 # → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"ukr_Cyrl", "fullText":"Привіт"}
 ```
 
-**Git Bash (Windows):**
+---
+
+## SynthesizeSpeech
+
+Synthesizes text to a WAV audio file using Piper TTS.
+
+Requires `Translation:TextToAudio` to be configured in `appsettings.json` for the requested language (see [docs/models.md](models.md#piper-tts)).
+The voice model is loaded lazily on first request and unloaded after `ModelTtlMinutes` of inactivity.
+
+espeak-ng must be installed on the server (see [docs/models.md](models.md#piper-tts)).
+
+### Request
+
+```protobuf
+message SynthesizeSpeechRequest {
+  string text            = 1;
+  string language        = 2;  // BCP-47 language code (e.g. "en", "uk"); matched against TextToAudio map
+  string voice           = 3;  // optional: speaker name for multi-speaker models (e.g. "mykyta", "lada", "tetiana")
+  float  speed           = 4;  // speech rate multiplier; 1.0 = normal, 0.5 = half speed, 2.0 = double speed
+  string language_format = 5;  // format for the language field: "bcp47" (default) | "flores200" | "native"
+}
+```
+
+### Response
+
+```protobuf
+message SynthesizeSpeechResponse {
+  bytes audio_data  = 1;  // WAV file bytes (16-bit PCM, RIFF header)
+  int32 sample_rate = 2;  // sample rate of the output audio, typically 22050 Hz
+}
+```
+
+### Examples
+
+**bash / Linux:**
 
 ```bash
-echo "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"auto\"}" | grpcurl -plaintext   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto   -d @   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
+# Synthesize and save to file
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"text": "Hello, world!", "language": "en"}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/SynthesizeSpeech \
+  | jq -r '.audioData' | base64 -d > output.wav
+```
+
+**PowerShell (Windows):**
+
+```powershell
+$body = '{"text":"Привіт, як справи?","language":"uk","voice":"mykyta","speed":1.0}'
+$resp = grpcurl -plaintext `
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto `
+  -d $body `
+  localhost:5100 lopatnov.translate.v1.TranslateService/SynthesizeSpeech `
+  | ConvertFrom-Json
+[IO.File]::WriteAllBytes("output.wav", [Convert]::FromBase64String($resp.audioData))
+```
+
+With custom speed (half speed):
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d '{"text": "Хорошо, что ты пришёл!", "language": "ru", "speed": 0.75}' \
+  localhost:5100 lopatnov.translate.v1.TranslateService/SynthesizeSpeech \
+  | jq -r '.audioData' | base64 -d > output.wav
+```
+
+---
+
+## TranslateAudio
+
+End-to-end speech-to-speech translation: transcribes the input audio (Whisper STT), translates the text (default translation model), and synthesizes the result (Piper TTS). Returns all intermediate results along with the translated audio.
+
+Requires both `Translation:AudioToText` (Whisper) and `Translation:TextToAudio` (Piper) to be configured in `appsettings.json`.
+
+### Request
+
+```protobuf
+message TranslateAudioRequest {
+  bytes  audio_data       = 1;  // WAV file bytes, max 50 MB (resampled automatically to 16 kHz mono for STT)
+  string source_language  = 2;  // BCP-47 source language hint; "" or "auto" = Whisper auto-detection
+  string target_language  = 3;  // BCP-47 target language; selects the TTS voice via TextToAudio map
+  string audio_format     = 4;  // reserved; pass "" or "wav"
+  string target_voice     = 5;  // optional: speaker name for multi-speaker target voice
+  string language_format  = 6;  // format for source_language/target_language: "bcp47" (default) | "flores200" | "native"
+}
+```
+
+### Response
+
+```protobuf
+message TranslateAudioResponse {
+  bytes  translated_audio = 1;  // synthesized WAV (16-bit PCM, RIFF header)
+  string transcription    = 2;  // full text transcribed from the input audio
+  string translated_text  = 3;  // translated text before TTS synthesis
+  int32  sample_rate      = 4;  // sample rate of the output audio, typically 22050 Hz
+}
+```
+
+### Examples
+
+**bash / Linux:**
+
+```bash
+# Translate Ukrainian speech to English
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d "{\"audio_data\": \"$(base64 -w0 speech-uk.wav)\", \"source_language\": \"uk\", \"target_language\": \"en\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateAudio \
+  | tee /tmp/resp.json \
+  | jq -r '.translatedAudio' | base64 -d > translated.wav
+
+# Show transcription and translation
+cat /tmp/resp.json | jq '{transcription, translatedText}'
+```
+
+**PowerShell (Windows):**
+
+```powershell
+$audioBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("speech.wav"))
+$body = "{`"audio_data`":`"$audioBase64`",`"source_language`":`"uk`",`"target_language`":`"en`"}"
+$resp = grpcurl -plaintext `
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto `
+  -d $body `
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateAudio `
+  | ConvertFrom-Json
+Write-Host "Transcription: $($resp.transcription)"
+Write-Host "Translation:   $($resp.translatedText)"
+[IO.File]::WriteAllBytes("translated.wav", [Convert]::FromBase64String($resp.translatedAudio))
+```
+
+With auto language detection and a specific target speaker:
+
+```bash
+grpcurl -plaintext \
+  -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
+  -d "{\"audio_data\": \"$(base64 -w0 speech.wav)\", \"source_language\": \"auto\", \"target_language\": \"uk\", \"target_voice\": \"mykyta\"}" \
+  localhost:5100 lopatnov.translate.v1.TranslateService/TranslateAudio \
+  | jq -r '.translatedAudio' | base64 -d > translated.wav
 ```
 
 ---
 
 ## GetCapabilities
 
-Returns service capabilities and the list of available translation models.
+Returns service capabilities and the list of available translation models and TTS voices.
 
 ```protobuf
 message GetCapabilitiesResponse {
+  repeated string available_voices = 2;  // TTS language keys from Translation:TextToAudio (e.g. "en", "ru", "uk")
   repeated string available_models = 3;  // translation model keys from AllowedModels
   bool stt_available               = 4;  // true when Translation:AudioToText is configured
+  bool tts_available               = 5;  // true when Translation:TextToAudio has at least one entry
 }
 ```
 
@@ -295,17 +436,21 @@ grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
   -d '{}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/GetCapabilities
-# → {"availableModels":["m2m100_418M"], "sttAvailable":true}
+# → {"availableVoices":["en","ru","uk"], "availableModels":["m2m100_418M"], "sttAvailable":true, "ttsAvailable":true}
 ```
 
 ---
 
 ## Error codes
 
-| Scenario                                                      | gRPC Status           |
-| ------------------------------------------------------------- | --------------------- |
-| Unknown `model` key                                           | `INVALID_ARGUMENT`    |
-| `model` not in `AllowedModels`                                | `PERMISSION_DENIED`   |
-| `TranscribeAudio` called when `AudioToText` is not configured | `FAILED_PRECONDITION` |
-| Invalid JSON in `TranslateLocalization`                       | `INVALID_ARGUMENT`    |
-| Model file missing at configured path                         | `INTERNAL`            |
+| Scenario                                                              | gRPC Status           |
+| --------------------------------------------------------------------- | --------------------- |
+| Unknown `model` key                                                   | `INVALID_ARGUMENT`    |
+| `model` not in `AllowedModels`                                        | `PERMISSION_DENIED`   |
+| `TranscribeAudio` called when `AudioToText` is not configured         | `FAILED_PRECONDITION` |
+| `SynthesizeSpeech` called when no voice is configured for `language`  | `FAILED_PRECONDITION` |
+| `TranslateAudio` called when STT or TTS is not configured             | `FAILED_PRECONDITION` |
+| Redirect cycle detected (`x-redirect-id` loop)                        | `FAILED_PRECONDITION` |
+| Invalid JSON in `TranslateLocalization`                               | `INVALID_ARGUMENT`    |
+| Language code not supported by the translation model                  | `INVALID_ARGUMENT`    |
+| Model file missing at configured path                                 | `INTERNAL`            |

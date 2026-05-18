@@ -54,17 +54,16 @@ public sealed class WhisperRecognizerIntegrationTests
         return ms.ToArray();
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task TranscribeAsync_SilentAudio_ReturnsResultWithoutCrashing()
     {
-        Skip.If(!File.Exists(ModelPath),
-            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
+        if (!File.Exists(ModelPath)) Assert.Skip(            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
 
         var options  = Options.Create(new WhisperOptions { ModelPath = ModelPath });
         using var sut = new WhisperRecognizer(options);
 
         var wav    = BuildSilentWav(durationSeconds: 1.0);
-        var result = await sut.TranscribeAsync(wav, "auto");
+        var result = await sut.TranscribeAsync(wav, "auto", TestContext.Current.CancellationToken);
 
         // A silent clip may produce empty text — that's fine.
         // The important thing is that the model loaded and returned a valid result.
@@ -73,11 +72,10 @@ public sealed class WhisperRecognizerIntegrationTests
         Assert.NotNull(result.FullText);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task TranscribeAsync_CancellationRequested_ThrowsOrCompletes()
     {
-        Skip.If(!File.Exists(ModelPath),
-            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
+        if (!File.Exists(ModelPath)) Assert.Skip(            $"Whisper model not found at '{ModelPath}'. Run scripts/download-whisper.ps1.");
 
         var options  = Options.Create(new WhisperOptions { ModelPath = ModelPath });
         using var sut = new WhisperRecognizer(options);

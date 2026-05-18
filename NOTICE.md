@@ -64,6 +64,29 @@ Citation:
 
 ---
 
+### Piper TTS Voices
+
+**Source:** https://huggingface.co/rhasspy/piper-voices  
+**Author:** Rhasspy contributors  
+**License:** MIT — https://opensource.org/licenses/MIT  
+✅ Unrestricted commercial use.
+
+Voice models are **not included in this repository**. They must be obtained separately.
+
+---
+
+### espeak-ng (system dependency)
+
+**Source:** https://github.com/espeak-ng/espeak-ng  
+**Author:** espeak-ng contributors (originally by Jonathan Duddington)  
+**License:** GNU General Public License v3 (GPL v3) — https://www.gnu.org/licenses/gpl-3.0.html
+
+espeak-ng is used by this project as a **subprocess** (called via `Process.Start()`) for phonemization in the Piper TTS pipeline. It is not linked, compiled into, or distributed with this project's binaries. The GPL v3 terms apply to espeak-ng itself; this project's Apache 2.0 license is not affected.
+
+When deploying, espeak-ng must be installed separately on the host system or container. Its binaries must be distributed in accordance with GPL v3 terms.
+
+---
+
 ### Key Runtime Dependencies
 
 | Component | Author | License |
@@ -72,6 +95,7 @@ Citation:
 | [Microsoft.ML.OnnxRuntime](https://github.com/microsoft/onnxruntime) | Microsoft | MIT |
 | [Microsoft.ML.Tokenizers](https://github.com/dotnet/machinelearning) | Microsoft | MIT |
 | [NAudio](https://github.com/naudio/NAudio) | Mark Heath | MIT |
+| [Whisper.net](https://github.com/sandrohanea/whisper.net) | Sandro Hanea | MIT |
 | [Moq](https://github.com/devlooped/moq) | Devlooped | BSD 3-Clause |
 | [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) *(optional)* | LibreTranslate Contributors | AGPL-3.0 |
 

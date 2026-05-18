@@ -1,4 +1,3 @@
-using Xunit.Abstractions;
 
 namespace Lopatnov.Translate.M2M100.Tests;
 
@@ -23,7 +22,7 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
         return Path.Combine("models", "translate", "m2m100_418M");
     }
 
-    [SkippableTheory]
+    [Theory]
     [InlineData("eng_Latn", 128022L)]
     [InlineData("en",       128022L)]
     [InlineData("ukr_Cyrl", 128094L)]
@@ -33,18 +32,18 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     public void GetLanguageTokenId_MatchesAddedTokensJson(string code, long expectedId)
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
-        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
+        if (!File.Exists(addedTokensPath)) Assert.Skip($"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
         Assert.Equal(expectedId, tokenizer.GetLanguageTokenId(code));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Encode_StartsWithSourceLangTokenAndEndsWithEos()
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
-        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
+        if (!File.Exists(addedTokensPath)) Assert.Skip($"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
@@ -59,11 +58,11 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
         Assert.Equal(M2M100Tokenizer.EosTokenId, ids[^1]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ContentTokenIds_AreInBpeRange()
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
-        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
+        if (!File.Exists(addedTokensPath)) Assert.Skip($"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
@@ -77,11 +76,11 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
             Assert.InRange(id, 4L, 128003L);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Decode_Encode_RoundTrip()
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
-        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
+        if (!File.Exists(addedTokensPath)) Assert.Skip($"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
         const string original = "Hello, how are you?";
@@ -102,14 +101,14 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     /// BPE pieces in vocab.json. A wrong offset would produce IDs that either don't
     /// exist in vocab.json or map to unrelated pieces.
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public void ContentTokenIds_MapToSensiblePiecesInVocab()
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
-        Skip.If(!File.Exists(addedTokensPath), $"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
+        if (!File.Exists(addedTokensPath)) Assert.Skip($"M2M-100 tokenizer config not found at '{addedTokensPath}'.");
 
         var vocabPath = Path.Combine(ModelPath, "vocab.json");
-        Skip.If(!File.Exists(vocabPath), "vocab.json not found — cannot verify offset.");
+        if (!File.Exists(vocabPath)) Assert.Skip("vocab.json not found — cannot verify offset.");
 
         using var doc = System.Text.Json.JsonDocument.Parse(
             File.ReadAllText(vocabPath, System.Text.Encoding.UTF8));

@@ -22,4 +22,19 @@ public sealed class TranslationOptions
     /// Empty = STT disabled (TranscribeAudio returns FailedPrecondition).
     /// </summary>
     public string AudioToText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maps ISO 639-1 language codes (e.g. "en", "ru", "uk") to the name of a Piper
+    /// model entry in Models (Type=Piper) used for text-to-speech.
+    /// Empty or absent = TTS disabled (SynthesizeSpeech returns FailedPrecondition).
+    /// </summary>
+    public Dictionary<string, string> TextToAudio { get; set; } = [];
+
+    /// <summary>
+    /// Names of model entries (keys in the <c>Models</c> section) to warm up at startup.
+    /// Each listed model receives a minimal synthetic request so its ONNX graph is
+    /// compiled and weights are loaded before real traffic arrives.
+    /// Empty array = warm-up disabled.
+    /// </summary>
+    public string[] WarmUp { get; set; } = [];
 }

@@ -13,7 +13,20 @@
 
 Published images are available at `ghcr.io/lopatnov/translate`. **Model files are not bundled** — they must be downloaded separately and mounted as a volume.
 
-**Step 1 — download models** (one-time):
+**Step 1 — install system dependencies:**
+
+Piper TTS requires **espeak-ng** installed on the host or in the container:
+
+```bash
+# Debian / Ubuntu / Docker image based on debian
+apt-get install -y espeak-ng
+
+# Windows — download MSI from https://github.com/espeak-ng/espeak-ng/releases and add to PATH
+# macOS
+brew install espeak-ng
+```
+
+**Step 2 — download models** (one-time):
 
 ```powershell
 # Translation model (Apache 2.0)
@@ -27,9 +40,14 @@ huggingface-cli download lopatnov/fasttext-language-id lid.176.ftz `
 # Speech-to-text model (MIT)
 huggingface-cli download lopatnov/whisper.cpp ggml-small.bin `
   --local-dir ./models/audio-to-text/whisper.cpp
+
+# Text-to-speech voices (MIT) — download the languages you need
+huggingface-cli download lopatnov/piper-voices `
+  en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json `
+  --local-dir ./models/text-to-audio/piper-voices
 ```
 
-**Step 2 — run with Docker Compose** (recommended):
+**Step 3 — run with Docker Compose** (recommended):
 
 Create a `docker-compose.yml` next to your `models/` directory:
 
@@ -42,25 +60,27 @@ services:
     volumes:
       - ./models:/app/models:ro
     environment:
-      - Translation__DefaultModel=m2m100_418M
-      - Translation__AudioToText=whisper-small
-      - Models__m2m100_418M__Path=/app/models/translate/m2m100_418M
-      - Models__whisper-small__Path=/app/models/audio-to-text/whisper.cpp/ggml-small.bin
+      - Translation__DefaultModel=m2m100_1.2B
+      - Translation__AllowedModels__0=m2m100_1.2B
+      - Translation__AudioToText=whisper-medium
+      - Models__m2m100_1.2B__Path=/app/models/translate/m2m100_1.2B
+      - Models__whisper-medium__Path=/app/models/audio-to-text/whisper.cpp/ggml-medium.bin
 ```
 
 ```bash
 docker compose up
 ```
 
-**Or run directly with `docker run`:**
+**Or run directly with `docker run`** (Step 4 alternative):
 
 ```bash
 docker run -p 5100:5100 \
   -v ./models:/app/models:ro \
-  -e Translation__DefaultModel=m2m100_418M \
-  -e Translation__AudioToText=whisper-small \
-  -e Models__m2m100_418M__Path=/app/models/translate/m2m100_418M \
-  -e Models__whisper-small__Path=/app/models/audio-to-text/whisper.cpp/ggml-small.bin \
+  -e Translation__DefaultModel=m2m100_1.2B \
+  -e Translation__AllowedModels__0=m2m100_1.2B \
+  -e Translation__AudioToText=whisper-medium \
+  -e Models__m2m100_1.2B__Path=/app/models/translate/m2m100_1.2B \
+  -e Models__whisper-medium__Path=/app/models/audio-to-text/whisper.cpp/ggml-medium.bin \
   ghcr.io/lopatnov/translate:latest
 ```
 
@@ -86,24 +106,30 @@ docker build -f docker/Dockerfile -t lopatnov/translate .
 
 Override any `appsettings.json` setting via environment variable (double underscore = section nesting).
 
-| Variable | Default | Description |
-|---|---|---|
-| `Translation__DefaultModel` | `m2m100_418M` | Translation model used when `model` field is empty in the request |
-| `Translation__AudioToText` | `whisper-small` | STT model key; set to `""` to disable `TranscribeAudio` |
-| `Translation__AutoDetect` | `lid-176-ftz` | Language detection model key |
-| `Translation__AllowedModels__0` | `m2m100_418M` | First allowed translation model (array index) |
-| `Translation__ModelTtlMinutes` | `30` | Minutes idle before a loaded model is evicted from memory |
-| `Models__<key>__Path` | *(see appsettings.json)* | Path override for any model entry |
-| `ASPNETCORE_HTTP_PORTS` | `5100` | gRPC server port |
+| Variable                           | Default                  | Description                                                                                                                                             |
+| ---------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Translation__DefaultModel`        | `m2m100_1.2B`            | Translation model used when `model` field is empty in the request                                                                                       |
+| `Translation__AudioToText`         | `whisper-medium`         | STT model key; set to `""` to disable `TranscribeAudio`                                                                                                 |
+| `Translation__AutoDetect`          | `glotlid`                | Language detection model key                                                                                                                            |
+| `Translation__AllowedModels__0`    | `m2m100_1.2B`            | First allowed translation model; must include DefaultModel or requests will be rejected                                                                  |
+| `Translation__ModelTtlMinutes`     | `30`                     | Minutes idle before a loaded model is evicted from memory                                                                                               |
+| `Translation__TextToAudio__en`     | `piper-en-US`            | TTS voice key for English (ISO 639-1 code → model key)                                                                                                  |
+| `Translation__TextToAudio__ru`     | `piper-ru-Ruslan`        | TTS voice key for Russian                                                                                                                               |
+| `Translation__TextToAudio__uk`     | `piper-uk-Oleksa`        | TTS voice key for Ukrainian                                                                                                                             |
+| `Models__<key>__Path`              | _(see appsettings.json)_ | Path override for any model entry                                                                                                                       |
+| `Models__<key>__ExecutionProvider` | `""` (auto)              | ONNX provider: `auto`, `cpu`, `directml`, `cuda`; Whisper: also `vulkan`, `coreml`                                                                      |
+| `ASPNETCORE_HTTP_PORTS`            | `5100`                   | gRPC server port                                                                                                                                        |
+| `TRANSLATE_TIMEOUT_MS`             | _(none)_                 | Server-side inference timeout per translation call (ms). Unset = no limit. Set the same value as in translate-angular to keep client and server in sync |
 
 **Common path overrides:**
 
-| Variable | Docker default |
-|---|---|
-| `Models__m2m100_418M__Path` | `/app/models/translate/m2m100_418M` |
-| `Models__whisper-small__Path` | `/app/models/audio-to-text/whisper.cpp/ggml-small.bin` |
-| `Models__whisper-medium__Path` | `/app/models/audio-to-text/whisper.cpp/ggml-medium.bin` |
-| `Models__lid-176-ftz__Path` | `/app/models/detect-lang/fasttext-language-id/lid.176.ftz` |
+| Variable                       | Docker default                                                       |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `Models__m2m100_418M__Path`    | `/app/models/translate/m2m100_418M`                                  |
+| `Models__whisper-small__Path`  | `/app/models/audio-to-text/whisper.cpp/ggml-small.bin`               |
+| `Models__whisper-medium__Path` | `/app/models/audio-to-text/whisper.cpp/ggml-medium.bin`              |
+| `Models__lid-176-ftz__Path`    | `/app/models/detect-lang/fasttext-language-id/lid.176.ftz`           |
+| `Models__piper-en-US__Path`    | `/app/models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx` |
 
 ---
 
@@ -143,4 +169,33 @@ environment:
   - Translation__AllowedModels__1=m2m100_1.2B
   - Models__m2m100_418M__Path=/app/models/translate/m2m100_418M
   - Models__m2m100_1.2B__Path=/app/models/translate/m2m100_1.2B
+```
+
+**Enable text-to-speech (English + Ukrainian):**
+
+```yaml
+environment:
+  - Translation__TextToAudio__en=piper-en-US
+  - Translation__TextToAudio__uk=piper-uk-Oleksa
+  - Models__piper-en-US__Path=/app/models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx
+  - Models__piper-uk-Oleksa__Path=/app/models/text-to-audio/piper-voices/uk_Oleksa/uk_UA-oleksa-high.onnx
+```
+
+**Enable GPU acceleration (DirectML on Windows, CUDA on Linux):**
+
+```yaml
+environment:
+  # Force DirectML for ONNX models (Windows only):
+  - Models__m2m100_418M__ExecutionProvider=directml
+  # Force CUDA for ONNX models (Linux with NVIDIA GPU):
+  - Models__m2m100_418M__ExecutionProvider=cuda
+  # Whisper auto-selects GPU at runtime; force a backend:
+  - Models__whisper-small__ExecutionProvider=cuda
+```
+
+**Disable TTS entirely:**
+
+```yaml
+environment:
+  - Translation__TextToAudio= # empty value clears the map
 ```

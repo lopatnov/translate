@@ -15,11 +15,31 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
     private readonly bool _ownsTokenizer;
     private readonly bool _ownsEncoder;
     private readonly bool _ownsDecoder;
+    private readonly SessionOptions? _sessionOptions;
+    private readonly bool _ownsSessionOptions;
+
+    // OnnxRuntime InferenceSession.Run is not safe for concurrent calls on the
+    // same session when native state is shared (observed as 0xC0000005 crashes
+    // under concurrent live-translation load). Serialize with a semaphore.
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
+
+    // Server-side inference timeout, read once at startup.
+    // Set TRANSLATE_TIMEOUT_MS env var to impose a limit (ms).
+    // When unset: inference runs to completion regardless of the gRPC client deadline.
+    private static readonly TimeSpan? InferenceTimeout = ReadInferenceTimeout();
+    private static TimeSpan? ReadInferenceTimeout()
+    {
+        var raw = Environment.GetEnvironmentVariable("TRANSLATE_TIMEOUT_MS");
+        return int.TryParse(raw, out var ms) && ms > 0
+            ? TimeSpan.FromMilliseconds(ms)
+            : null;
+    }
 
     public NllbTranslator(IOptions<NllbOptions> options)
-        : this(options.Value, null, null, null) { }
+        : this(options.Value, null, null, null, null) { }
 
-    public NllbTranslator(NllbOptions options, INllbTokenizer? tokenizer, IOnnxSession? encoderSession, IOnnxSession? decoderSession)
+    public NllbTranslator(NllbOptions options, INllbTokenizer? tokenizer, IOnnxSession? encoderSession, IOnnxSession? decoderSession,
+        SessionOptions? sessionOptions = null)
     {
         if (options.BeamSize > 1)
             throw new NotSupportedException($"BeamSize > 1 is not implemented; only greedy decoding (BeamSize = 1) is supported.");
@@ -30,15 +50,38 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
         _ownsTokenizer = tokenizer is null;
         _tokenizer = tokenizer ?? new NllbTokenizer(options.Path, options.TokenizerFile, options.TokenizerConfigFile);
         _ownsEncoder = encoderSession is null;
-        _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile));
+        _encoderSession = encoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.EncoderFile), sessionOptions);
         _ownsDecoder = decoderSession is null;
-        _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile));
+        _decoderSession = decoderSession ?? new OnnxSessionAdapter(Path.Combine(options.Path, options.DecoderFile), sessionOptions);
+        // Own sessionOptions only when it was provided and used to construct at least one session.
+        // After session construction ONNX has copied all relevant config, so we can dispose freely.
+        _sessionOptions = sessionOptions;
+        _ownsSessionOptions = sessionOptions is not null && (_ownsEncoder || _ownsDecoder);
     }
 
-    public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
+    public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.Run(() => Translate(text, sourceLanguage, targetLanguage, cancellationToken), cancellationToken);
+        await _inferenceLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Use a server-side timeout token (if TRANSLATE_TIMEOUT_MS is set),
+            // otherwise CancellationToken.None — so inference always runs to completion
+            // regardless of the gRPC client deadline. The outer cancellationToken is still
+            // respected at two earlier checkpoints: ThrowIfCancellationRequested() above
+            // and WaitAsync(), plus Task.Run won't start if already cancelled.
+            using var inferenceCts = InferenceTimeout.HasValue
+                ? new CancellationTokenSource(InferenceTimeout.Value)
+                : new CancellationTokenSource();
+            return await Task.Run(
+                () => Translate(text, sourceLanguage, targetLanguage, inferenceCts.Token),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { _inferenceLock.Release(); }
+            catch (ObjectDisposedException) { /* disposal already in progress */ }
+        }
     }
 
     private string Translate(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken)
@@ -89,9 +132,14 @@ public sealed class NllbTranslator : ITextTranslator, IDisposable
 
     public void Dispose()
     {
+        // Acquire the lock and keep it (do NOT Release before Dispose).
+        // See M2M100Translator.Dispose for the full rationale.
+        _inferenceLock.Wait();
         if (_ownsTokenizer) _tokenizer.Dispose();
         if (_ownsEncoder) _encoderSession.Dispose();
         if (_ownsDecoder) _decoderSession.Dispose();
+        if (_ownsSessionOptions) _sessionOptions!.Dispose();
+        _inferenceLock.Dispose();
     }
 
     private long RunDecoderStep(long[] decoderBuf, int decoderCount, DenseTensor<float> encoderHiddenState, long[] attentionMask)

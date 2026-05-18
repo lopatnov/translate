@@ -17,6 +17,8 @@
   - [LibreTranslate](#libretranslate)
 - Speech-to-Text
   - [Whisper](#whisper)
+- Text-to-Speech
+  - [Piper TTS](#piper-tts)
 
 ---
 
@@ -29,7 +31,7 @@ Models are configured by name in `appsettings.json` under `Models`. Each entry h
 ```jsonc
 "Models": {
   "<name>": {
-    "Type": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate | Whisper
+    "Type": "<type>",  // required: NLLB | M2M100 | FastText | LibreTranslate | Whisper | Piper | Redirect
     // ... type-specific properties (see each model below)
   }
 }
@@ -49,6 +51,7 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `MaxTokens` | `512` | Maximum tokens per translation |
 | `BeamSize` | `1` | Beam search width (NLLB only; higher = better quality, slower) |
 | `VocabFile` | `""` | BPE vocabulary file (M2M100 only: `vocab.json`) |
+| `ExecutionProvider` | `""` (auto) | ONNX execution provider. `""` or `"auto"` = probe best available (DirectML on Windows, CUDA on Linux, then CPU). Explicit: `"cpu"`, `"directml"`, `"cuda"`. Falls back to CPU with a warning if the requested provider is unavailable. |
 
 **Properties for FastText:**
 
@@ -66,6 +69,38 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `BaseUrl` | — | URL of the LibreTranslate instance, e.g. `http://libretranslate:5000` |
 | `ApiKey` | `""` | API key, if the instance requires one |
 
+**Properties for Redirect:**
+
+Forwards translation requests to another Lopatnov.Translate gRPC service instance (e.g. on a different machine). Allows distributing models across servers.
+
+| Property | Default | Description |
+| --- | --- | --- |
+| `RedirectUrl` | — | gRPC endpoint of the remote service, e.g. `http://192.168.1.100:5100` |
+| `RedirectName` | `""` | Model name to request on the remote; defaults to the local key name if empty |
+
+Cycle detection is built in: a random `x-redirect-id` header is propagated through the hop chain. If a request returns to the originating server, a `FAILED_PRECONDITION` error is returned immediately.
+
+```jsonc
+"Models": {
+  "remote-m2m100": {
+    "Type": "Redirect",
+    "RedirectUrl": "http://192.168.1.100:5100",
+    "RedirectName": "m2m100_1.2B"   // model key on the remote; "" = same as local key
+  }
+},
+"Translation": {
+  "AllowedModels": ["remote-m2m100"]
+}
+```
+
+**Properties for Piper:**
+
+See the [Piper TTS](#piper-tts) section below.
+
+**Properties for Whisper:**
+
+See the [Whisper](#whisper) section below.
+
 #### Type compatibility
 
 `Type` identifies the tokenizer format, not the exact model. This means fine-tuned or alternative models are supported as long as the tokenizer is compatible:
@@ -77,6 +112,8 @@ Multiple entries of the same type are allowed — just use different names. If `
 | `FastText` | Any fastText supervised classification model in `.bin` or `.ftz` format |
 | `LibreTranslate` | Any LibreTranslate-compatible HTTP API endpoint |
 | `Whisper` | Any Whisper ggml model file (`ggml-*.bin`) compatible with whisper.cpp / Whisper.net |
+| `Piper` | Any Piper TTS ONNX voice with a companion `.onnx.json` sidecar (phoneme_id_map, sample_rate, espeak voice) |
+| `Redirect` | Another Lopatnov.Translate gRPC service instance (any model type on the remote) |
 
 Models **not** compatible without a new type: MarianMT (OPUS-MT), mBART-50, SeamlessM4T — they use different tokenizer formats.
 
@@ -92,7 +129,13 @@ Controls routing and lifecycle of loaded models.
   "AutoDetect": "lid-176-ftz",    // name of a FastText model for language auto-detection
   "AudioToText": "whisper-small", // name of a Whisper model for speech-to-text; "" = STT disabled
   "AllowedModels": ["m2m100_418M"], // allowlist; empty = all configured translation models allowed
-  "ModelTtlMinutes": 30           // minutes of inactivity before a model is unloaded from memory
+  "ModelTtlMinutes": 30,          // minutes of inactivity before a model is unloaded from memory
+  "TextToAudio": {                // language code → Piper model key; absent = TTS disabled
+    "en": "piper-en-US",
+    "ru": "piper-ru-RU",
+    "uk": "piper-uk-UA"
+  },
+  "WarmUp": ["m2m100_418M", "whisper-small"]  // pre-load these models at startup
 }
 ```
 
@@ -101,8 +144,10 @@ Controls routing and lifecycle of loaded models.
 | `DefaultModel` | `""` | Name of the model to use when `model` is not specified in the request. If empty and the request omits `model`, the request fails. |
 | `AutoDetect` | `""` | Name of a `FastText` model used for language auto-detection. Required to use `source_language: "auto"` in `TranslateText` or the `DetectLanguage` RPC. If empty or the model file is missing, falls back to heuristic detection. |
 | `AudioToText` | `""` | Name of a `Whisper` model entry used for speech-to-text transcription (`TranscribeAudio` RPC). If empty, the RPC returns `FAILED_PRECONDITION`. |
-| `AllowedModels` | `[]` | Restricts which translation models clients may request by name. Empty list means all configured translation models are accessible. `Whisper` and `FastText` entries are not affected by this list. |
-| `ModelTtlMinutes` | `30` | Translation models and the Whisper STT model are kept in memory for this many minutes after last use, then unloaded to free resources. The auto-detect language detector (`Translation:AutoDetect`) is loaded once at startup and is not affected by this TTL. |
+| `TextToAudio` | `{}` | Dictionary of ISO 639-1 language codes → `Piper` model keys. Used by `SynthesizeSpeech` and `TranslateAudio`. If empty or absent, TTS RPCs return `FAILED_PRECONDITION`. |
+| `AllowedModels` | `[]` | Restricts which translation models clients may request by name. Empty list means all configured translation models are accessible. `Whisper`, `FastText`, and `Piper` entries are not affected by this list. |
+| `ModelTtlMinutes` | `30` | Translation models and the Whisper/Piper models are kept in memory for this many minutes after last use, then unloaded to free resources. The auto-detect language detector is loaded once at startup and is not affected by this TTL. |
+| `WarmUp` | `[]` | List of model keys to pre-load at service startup. Runs concurrently with request serving; each model logs elapsed time. Failures are warnings — the service stays up. |
 
 ---
 
@@ -422,4 +467,97 @@ To switch models: change `AudioToText` — no code changes needed.
 | Property | Required | Description |
 | --- | --- | --- |
 | `Path` | ✅ | Path to the `.bin` ggml model file |
+| `ExecutionProvider` | — | Whisper.net runtime. `""` or `"auto"` (default) = probe best available in order: Cuda → Cuda12 → Vulkan → CoreML → Cpu. Explicit: `"cpu"`, `"cuda"`, `"vulkan"`, `"coreml"`. The selected runtime is logged at startup. |
+
+---
+
+## Text-to-Speech
+
+---
+
+### Piper TTS
+
+**Piper · ONNX format · language-specific voices**
+
+Runs locally via [ONNX Runtime](https://onnxruntime.ai/). Each voice is a separate ONNX model trained for one language. Text is phonemised by [espeak-ng](https://github.com/espeak-ng/espeak-ng) (must be installed separately) before inference. The model is loaded lazily on first request and unloaded after `ModelTtlMinutes` of inactivity.
+
+**License:**
+- Piper voices: **MIT** ✅ Unrestricted commercial use.
+- espeak-ng (system dependency): **GPL v3** — called as a subprocess, does not affect your code's license, but espeak-ng binaries must be distributed under GPL v3 terms.
+
+**System dependency: espeak-ng**
+
+| Platform | Install command |
+| --- | --- |
+| Debian / Ubuntu (Docker) | `apt-get install -y espeak-ng` |
+| Windows | [Download MSI from GitHub Releases](https://github.com/espeak-ng/espeak-ng/releases) — add to PATH |
+| macOS | `brew install espeak-ng` |
+
+**Download voices**
+
+Voices are hosted at [lopatnov/piper-voices](https://huggingface.co/lopatnov/piper-voices):
+
+```bash
+# English (en_US-joe-medium)
+huggingface-cli download lopatnov/piper-voices \
+  en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+
+# Russian (ru_RU-ruslan-medium)
+huggingface-cli download lopatnov/piper-voices \
+  ru_RU/ru_RU-ruslan-medium.onnx ru_RU/ru_RU-ruslan-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+
+# Ukrainian (uk_UA-ukrainian_tts-medium, 3 speakers: lada / mykyta / tetiana)
+huggingface-cli download lopatnov/piper-voices \
+  uk_UA/uk_UA-ukrainian_tts-medium.onnx uk_UA/uk_UA-ukrainian_tts-medium.onnx.json \
+  --local-dir ./models/text-to-audio/piper-voices
+```
+
+Each voice requires both the `.onnx` model file and its `.onnx.json` sidecar (phoneme map, sample rate, speaker info).
+
+**appsettings.json**
+
+```jsonc
+"Models": {
+  "piper-en-US": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx"
+  },
+  "piper-ru-RU": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/ru_RU/ru_RU-ruslan-medium.onnx"
+  },
+  "piper-uk-UA": {
+    "Type": "Piper",
+    "Path": "./models/text-to-audio/piper-voices/uk_UA/uk_UA-ukrainian_tts-medium.onnx"
+  }
+},
+"Translation": {
+  "TextToAudio": {
+    "en": "piper-en-US",   // ISO 639-1 code → model key
+    "ru": "piper-ru-RU",
+    "uk": "piper-uk-UA"
+  }
+}
+```
+
+`TextToAudio` is a dictionary of ISO 639-1 language codes → model keys. If empty or absent, `SynthesizeSpeech` returns `FAILED_PRECONDITION`.
+
+**Multi-speaker voices**
+
+The Ukrainian voice (`uk_UA-ukrainian_tts-medium`) has 3 speakers. Select a speaker via the `voice` field in `SynthesizeSpeechRequest`:
+
+| `voice` value | Speaker |
+| --- | --- |
+| `lada` | Female (default when omitted) |
+| `mykyta` | Male |
+| `tetiana` | Female (different style) |
+
+**Properties for Piper:**
+
+| Property | Required | Description |
+| --- | --- | --- |
+| `Path` | ✅ | Path to the `.onnx` voice model file. The companion `.onnx.json` must exist at the same path + `.json`. |
+| `ExecutionProvider` | — | ONNX execution provider. `""` or `"auto"` (default) = probe best available. Explicit: `"cpu"`, `"directml"`, `"cuda"`. |
 
