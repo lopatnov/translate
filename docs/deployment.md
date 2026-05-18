@@ -173,9 +173,9 @@ environment:
 ```yaml
 environment:
   - Translation__TextToAudio__en=piper-en-US
-  - Translation__TextToAudio__uk=piper-uk-UA
+  - Translation__TextToAudio__uk=piper-uk-Oleksa
   - Models__piper-en-US__Path=/app/models/text-to-audio/piper-voices/en_US/en_US-joe-medium.onnx
-  - Models__piper-uk-UA__Path=/app/models/text-to-audio/piper-voices/uk_UA/uk_UA-ukrainian_tts-medium.onnx
+  - Models__piper-uk-Oleksa__Path=/app/models/text-to-audio/piper-voices/uk_UA/uk_UA-ukrainian_tts-medium.onnx
 ```
 
 **Enable GPU acceleration (DirectML on Windows, CUDA on Linux):**
