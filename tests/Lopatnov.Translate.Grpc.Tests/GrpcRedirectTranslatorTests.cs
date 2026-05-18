@@ -74,6 +74,27 @@ public sealed class GrpcRedirectTranslatorTests
         Assert.Equal(StatusCode.FailedPrecondition, ex.StatusCode);
     }
 
+    // ── Non-cycle path — gRPC connection fails (unreachable server) ──────────
+
+    [Fact]
+    public async Task TranslateAsync_ThrowsRpcException_WhenServerIsUnreachable()
+    {
+        // No cycle: no incoming header, fresh ID. Proceeds past cycle detection
+        // and attempts the gRPC call — fails because localhost:59999 is not listening.
+        var detector = new RedirectCycleDetector();
+        using var sut = Build(detector, NoContext());
+
+        var ex = await Assert.ThrowsAsync<RpcException>(
+            () => sut.TranslateAsync("text", "eng_Latn", "fra_Latn",
+                TestContext.Current.CancellationToken));
+
+        // Any RPC status is acceptable — the server is simply unreachable.
+        Assert.NotNull(ex);
+        // After the call, the ID must have been removed from the detector (finally block ran).
+        // Since no incoming header was used, we can't know the generated ID, but the
+        // detector should be empty after the finally block executes.
+    }
+
     // ── Dispose ───────────────────────────────────────────────────────────────
 
     [Fact]

@@ -18,17 +18,21 @@ public sealed class EspeakPhonemizerTests
     // Model sidecar paths (relative to test output directory)
     // -------------------------------------------------------------------------
 
-    private const string RuslanJsonPath =
-        @"..\..\..\..\..\models\text-to-audio\piper-voices\ru_RU\ru_RU-ruslan-medium.onnx.json";
+    private static readonly string RuslanJsonPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "models", "text-to-audio", "piper-voices", "ru_RU", "ru_RU-ruslan-medium.onnx.json"));
 
-    private const string IrinaJsonPath =
-        @"..\..\..\..\..\models\text-to-audio\piper-voices\ru_Irina\ru_RU-irina-medium.onnx.json";
+    private static readonly string IrinaJsonPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "models", "text-to-audio", "piper-voices", "ru_Irina", "ru_RU-irina-medium.onnx.json"));
 
-    private const string OleksaJsonPath =
-        @"..\..\..\..\..\models\text-to-audio\piper-voices\uk_Oleksa\uk_UA-oleksa-high.onnx.json";
+    private static readonly string OleksaJsonPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "models", "text-to-audio", "piper-voices", "uk_Oleksa", "uk_UA-oleksa-high.onnx.json"));
 
-    private const string UkMediumJsonPath =
-        @"..\..\..\..\..\models\text-to-audio\piper-voices\uk_UA\uk_UA-ukrainian_tts-medium.onnx.json";
+    private static readonly string UkMediumJsonPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "models", "text-to-audio", "piper-voices", "uk_UA", "uk_UA-ukrainian_tts-medium.onnx.json"));
 
     // -------------------------------------------------------------------------
     // Test sentences
@@ -110,9 +114,10 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Russian_RuslanMap_AllIPACharsFound()
     {
-        if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+        if (!File.Exists(RuslanJsonPath)) Assert.Skip($"Ruslan sidecar not found at: {RuslanJsonPath}");
 
-        var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
+        var config = PiperVoiceConfig.LoadFrom(RuslanJsonPath);
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
@@ -128,9 +133,10 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Russian_IrinaMap_AllIPACharsFound()
     {
-        if (!File.Exists(IrinaJsonPath)) Assert.Skip(            $"Irina sidecar not found at: {Path.GetFullPath(IrinaJsonPath)}");
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+        if (!File.Exists(IrinaJsonPath)) Assert.Skip($"Irina sidecar not found at: {IrinaJsonPath}");
 
-        var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(IrinaJsonPath));
+        var config = PiperVoiceConfig.LoadFrom(IrinaJsonPath);
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
@@ -146,9 +152,10 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage2_Coverage_Ukrainian_OleksaMap_AllIPACharsFound()
     {
-        if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+        if (!File.Exists(OleksaJsonPath)) Assert.Skip($"Oleksa sidecar not found at: {OleksaJsonPath}");
 
-        var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
+        var config = PiperVoiceConfig.LoadFrom(OleksaJsonPath);
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
 
         var missing = ipa
@@ -168,9 +175,10 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage3_PhonemeIds_Russian_Ruslan_ProducesReasonableCount()
     {
-        if (!File.Exists(RuslanJsonPath)) Assert.Skip(            $"Ruslan sidecar not found at: {Path.GetFullPath(RuslanJsonPath)}");
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+        if (!File.Exists(RuslanJsonPath)) Assert.Skip($"Ruslan sidecar not found at: {RuslanJsonPath}");
 
-        var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(RuslanJsonPath));
+        var config = PiperVoiceConfig.LoadFrom(RuslanJsonPath);
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(RussianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
         var ids    = PiperSynthesizer.BuildPhonemeIds(ipa, config.PhonemeIdMap);
 
@@ -186,9 +194,10 @@ public sealed class EspeakPhonemizerTests
     [Trait("Category", "Integration")]
     public async Task Stage3_PhonemeIds_Ukrainian_Oleksa_ProducesReasonableCount()
     {
-        if (!File.Exists(OleksaJsonPath)) Assert.Skip(            $"Oleksa sidecar not found at: {Path.GetFullPath(OleksaJsonPath)}");
+        if (!EspeakAvailable()) Assert.Skip("espeak-ng not found on PATH — install it to run this test.");
+        if (!File.Exists(OleksaJsonPath)) Assert.Skip($"Oleksa sidecar not found at: {OleksaJsonPath}");
 
-        var config = PiperVoiceConfig.LoadFrom(Path.GetFullPath(OleksaJsonPath));
+        var config = PiperVoiceConfig.LoadFrom(OleksaJsonPath);
         var ipa    = await EspeakPhonemizer.PhonemizeAsync(UkrainianText, config.Espeak.Voice, TestContext.Current.CancellationToken);
         var ids    = PiperSynthesizer.BuildPhonemeIds(ipa, config.PhonemeIdMap);
 
