@@ -179,7 +179,7 @@ public sealed class PiperSynthesizerTests
         };
         var ids = PiperSynthesizer.BuildPhonemeIdsFromText("абв", map);
         // BOS(1) + PAD(0) + а(10) + PAD(0) + EOS(2) — б and в absent
-        Assert.Equal(new long[] { 1L, 0L, 10L, 0L, 2L }, ids);
+        Assert.Equal(s_bosMapCyrEos, ids);
     }
 
     [Fact]

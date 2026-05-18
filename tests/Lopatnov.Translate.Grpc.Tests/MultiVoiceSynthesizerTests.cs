@@ -73,7 +73,7 @@ public sealed class MultiVoiceSynthesizerTests
             new Dictionary<string, PiperSynthesizer> { ["en"] = EmptyPathSynth() });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.SynthesizeAsync("text", "en-US", cancellationToken: TestContext.Current.CancellationToken));
+            () => sut.SynthesizeAsync("text", "en-US", "", 1.0f, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class MultiVoiceSynthesizerTests
             new Dictionary<string, PiperSynthesizer> { ["en"] = EmptyPathSynth() });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.SynthesizeAsync("text", "", cancellationToken: TestContext.Current.CancellationToken));
+            () => sut.SynthesizeAsync("text", "", "", 1.0f, TestContext.Current.CancellationToken));
     }
 
     // ── Dispose ───────────────────────────────────────────────────────────────

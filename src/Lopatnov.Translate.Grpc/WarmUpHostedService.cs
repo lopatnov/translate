@@ -54,10 +54,12 @@ internal sealed class WarmUpHostedService : BackgroundService
             return;
 
         var modelNames = string.Join(", ", models);
+#pragma warning disable CA1873 // modelNames already computed above — evaluation not deferred
         _logger.LogInformation(
             "WarmUp: starting pre-load of {Count} model(s): {Models}",
             models.Length,
             modelNames);
+#pragma warning restore CA1873
 
         foreach (var name in models)
         {
@@ -84,7 +86,9 @@ internal sealed class WarmUpHostedService : BackgroundService
         {
             await DispatchWarmUpAsync(name, modelType, ct);
             sw.Stop();
+#pragma warning disable CA1873 // ElapsedMilliseconds is a cheap property on a stopped Stopwatch
             _logger.LogInformation("WarmUp: {Name} ({Type}) ready in {Ms} ms", name, modelType, sw.ElapsedMilliseconds);
+#pragma warning restore CA1873
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -140,8 +144,10 @@ internal sealed class WarmUpHostedService : BackgroundService
         // Only warm up if this model is the configured STT model.
         if (!name.Equals(_translationOpts.AudioToText, StringComparison.OrdinalIgnoreCase))
         {
+#pragma warning disable CA1873 // name is a cheap local string
             _logger.LogDebug(
                 "WarmUp: Whisper '{Name}' is not the active AudioToText model — skipping", name);
+#pragma warning restore CA1873
             return;
         }
 
@@ -159,8 +165,10 @@ internal sealed class WarmUpHostedService : BackgroundService
 
         if (string.IsNullOrEmpty(lang))
         {
+#pragma warning disable CA1873 // name is a cheap local string
             _logger.LogDebug(
                 "WarmUp: Piper '{Name}' is not referenced in Translation:TextToAudio — skipping", name);
+#pragma warning restore CA1873
             return;
         }
 

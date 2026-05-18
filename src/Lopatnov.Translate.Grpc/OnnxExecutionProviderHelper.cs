@@ -56,17 +56,21 @@ public static class OnnxExecutionProviderHelper
             try
             {
                 append(opts);
+#pragma warning disable CA1873 // display is a cheap local string — no guard needed
                 logger?.LogInformation(
                     "ONNX execution provider auto-selected: {Provider} — inference will run on GPU/NPU",
                     display);
+#pragma warning restore CA1873
                 return opts;
             }
             catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or EntryPointNotFoundException)
             {
                 opts.Dispose();
+#pragma warning disable CA1873
                 logger?.LogDebug(ex,
                     "Auto-detection: {Provider} not available — trying next",
                     display);
+#pragma warning restore CA1873
             }
         }
 
@@ -92,7 +96,9 @@ public static class OnnxExecutionProviderHelper
         try
         {
             append(opts);
+#pragma warning disable CA1873 // display is a cheap local string — no guard needed
             logger?.LogInformation("ONNX execution provider: {Provider}", display);
+#pragma warning restore CA1873
         }
         catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or EntryPointNotFoundException)
         {

@@ -287,5 +287,8 @@ public sealed class WarmUpHostedServiceTests
             catch (OperationCanceledException) { /* expected when service is stopped externally */ }
         }
         await svc.StopAsync(CancellationToken.None);
+
+        // After stopping, the task must be in a terminal state (not still running).
+        Assert.True(svc.ExecuteTask is null or { IsCompleted: true });
     }
 }
