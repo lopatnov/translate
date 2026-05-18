@@ -559,4 +559,191 @@ public sealed class TranslateGrpcServiceTests
         Assert.Equal("hello", response.Transcription);
         Assert.Equal("bonjour", response.TranslatedText);
     }
+
+    // TranslateAudio — Step 3 TTS error paths
+
+    private static TranslateGrpcService SvcForAudioTranslationWith(
+        ISpeechSynthesizer synthesizer)
+    {
+        var mockRecognizer = new Mock<ISpeechRecognizer>();
+        mockRecognizer
+            .Setup(r => r.TranscribeAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Core.Models.TranscriptionResult([], DetectedLanguage: "en", FullText: "hello"));
+
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("привіт");
+
+        return SvcForAudioTranslation(mockRecognizer.Object, synthesizer, mockTranslator.Object);
+    }
+
+    [Fact]
+    public async Task TranslateAudio_ThrowsFailedPrecondition_WhenSynthesizerNotSupported()
+    {
+        var mockSynth = new Mock<ISpeechSynthesizer>();
+        mockSynth
+            .Setup(s => s.SynthesizeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<float>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new NotSupportedException("TTS not configured"));
+
+        var svc = SvcForAudioTranslationWith(mockSynth.Object);
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateAudio(new TranslateAudioRequest
+            {
+                AudioData      = Google.Protobuf.ByteString.Empty,
+                SourceLanguage = "auto",
+                TargetLanguage = "uk",
+                LanguageFormat = "bcp47",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.FailedPrecondition, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task TranslateAudio_ThrowsInternal_WhenSynthesizerInvalidOperation()
+    {
+        var mockSynth = new Mock<ISpeechSynthesizer>();
+        mockSynth
+            .Setup(s => s.SynthesizeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<float>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("espeak-ng not found"));
+
+        var svc = SvcForAudioTranslationWith(mockSynth.Object);
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateAudio(new TranslateAudioRequest
+            {
+                AudioData      = Google.Protobuf.ByteString.Empty,
+                SourceLanguage = "auto",
+                TargetLanguage = "uk",
+                LanguageFormat = "bcp47",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.Internal, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task TranslateAudio_ThrowsFailedPrecondition_WhenSynthesizerFileNotFound()
+    {
+        var mockSynth = new Mock<ISpeechSynthesizer>();
+        mockSynth
+            .Setup(s => s.SynthesizeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<float>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new FileNotFoundException("voice.onnx not found"));
+
+        var svc = SvcForAudioTranslationWith(mockSynth.Object);
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateAudio(new TranslateAudioRequest
+            {
+                AudioData      = Google.Protobuf.ByteString.Empty,
+                SourceLanguage = "auto",
+                TargetLanguage = "uk",
+                LanguageFormat = "bcp47",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.FailedPrecondition, ex.StatusCode);
+    }
+
+    // ── GetCapabilities ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCapabilities_ReturnsModels_SttAndTtsAvailable()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        var manager = new ModelSessionManager(
+            new Dictionary<string, Func<ITextTranslator>> { ["nllb"] = () => mockTranslator.Object },
+            allowedModels: ["nllb"],
+            ttl: TimeSpan.FromMinutes(30));
+
+        var svc = new TranslateGrpcService(
+            manager, NoDetector, NoRecognizer, NoSynthesizer,
+            Options.Create(new TranslationOptions
+            {
+                DefaultModel = "nllb",
+                AudioToText  = "whisper-small",
+                TextToAudio  = new Dictionary<string, string> { ["en"] = "piper-en", ["uk"] = "piper-uk" },
+            }));
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var response = await svc.GetCapabilities(new GetCapabilitiesRequest(), ctx.Object);
+
+        Assert.True(response.SttAvailable);
+        Assert.True(response.TtsAvailable);
+        Assert.Contains("nllb", response.AvailableModels);
+        Assert.Contains("en", response.AvailableVoices);
+        Assert.Contains("uk", response.AvailableVoices);
+    }
+
+    [Fact]
+    public async Task GetCapabilities_SttAndTtsDisabled_WhenNotConfigured()
+    {
+        var svc = new TranslateGrpcService(
+            EmptyManager(), NoDetector, NoRecognizer, NoSynthesizer,
+            Options.Create(new TranslationOptions
+            {
+                DefaultModel = "nllb",
+                AudioToText  = string.Empty,
+                TextToAudio  = [],
+            }));
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var response = await svc.GetCapabilities(new GetCapabilitiesRequest(), ctx.Object);
+
+        Assert.False(response.SttAvailable);
+        Assert.False(response.TtsAvailable);
+        Assert.Empty(response.AvailableModels);
+        Assert.Empty(response.AvailableVoices);
+    }
+
+    // ── TranslateLocalization ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task TranslateLocalization_ReturnsTranslatedJson_ForSimpleObject()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Привіт");
+
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", mockTranslator.Object),
+            NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var response = await svc.TranslateLocalization(new TranslateLocalizationRequest
+        {
+            Json           = """{"greeting": "Hello"}""",
+            SourceLanguage = "eng_Latn",
+            TargetLanguage = "ukr_Cyrl",
+            LanguageFormat = "flores200",
+        }, ctx.Object);
+
+        Assert.Equal(1, response.StringsTranslated);
+        Assert.Contains("Привіт", response.Json);
+    }
+
+    [Fact]
+    public async Task TranslateLocalization_ThrowsInvalidArgument_ForMalformedJson()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", mockTranslator.Object),
+            NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateLocalization(new TranslateLocalizationRequest
+            {
+                Json           = "this is not json {{{",
+                SourceLanguage = "eng_Latn",
+                TargetLanguage = "ukr_Cyrl",
+                LanguageFormat = "flores200",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
+        Assert.Contains("Invalid JSON", ex.Status.Detail);
+    }
 }
