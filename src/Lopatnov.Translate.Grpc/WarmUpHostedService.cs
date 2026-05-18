@@ -17,7 +17,9 @@ namespace Lopatnov.Translate.Grpc;
 /// <para>
 /// Configure via <c>appsettings.json</c>:
 /// <code>
-/// "WarmUp": { "Models": [ "m2m100_418M", "whisper-small", "piper-en-US" ] }
+/// "Translation": {
+///   "WarmUp": [ "m2m100_1.2B", "whisper-medium", "piper-en-US" ]
+/// }
 /// </code>
 /// Model names must match keys in the <c>Models</c> section.
 /// </para>
@@ -64,7 +66,10 @@ internal sealed class WarmUpHostedService : BackgroundService
         foreach (var name in models)
         {
             if (stoppingToken.IsCancellationRequested)
-                break;
+            {
+                _logger.LogInformation("WarmUp: cancelled before all models were pre-loaded.");
+                return;
+            }
 
             await WarmUpOneAsync(name, stoppingToken);
         }

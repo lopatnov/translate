@@ -60,10 +60,11 @@ services:
     volumes:
       - ./models:/app/models:ro
     environment:
-      - Translation__DefaultModel=m2m100_418M
-      - Translation__AudioToText=whisper-small
-      - Models__m2m100_418M__Path=/app/models/translate/m2m100_418M
-      - Models__whisper-small__Path=/app/models/audio-to-text/whisper.cpp/ggml-small.bin
+      - Translation__DefaultModel=m2m100_1.2B
+      - Translation__AllowedModels__0=m2m100_1.2B
+      - Translation__AudioToText=whisper-medium
+      - Models__m2m100_1.2B__Path=/app/models/translate/m2m100_1.2B
+      - Models__whisper-medium__Path=/app/models/audio-to-text/whisper.cpp/ggml-medium.bin
 ```
 
 ```bash
@@ -75,10 +76,11 @@ docker compose up
 ```bash
 docker run -p 5100:5100 \
   -v ./models:/app/models:ro \
-  -e Translation__DefaultModel=m2m100_418M \
-  -e Translation__AudioToText=whisper-small \
-  -e Models__m2m100_418M__Path=/app/models/translate/m2m100_418M \
-  -e Models__whisper-small__Path=/app/models/audio-to-text/whisper.cpp/ggml-small.bin \
+  -e Translation__DefaultModel=m2m100_1.2B \
+  -e Translation__AllowedModels__0=m2m100_1.2B \
+  -e Translation__AudioToText=whisper-medium \
+  -e Models__m2m100_1.2B__Path=/app/models/translate/m2m100_1.2B \
+  -e Models__whisper-medium__Path=/app/models/audio-to-text/whisper.cpp/ggml-medium.bin \
   ghcr.io/lopatnov/translate:latest
 ```
 
@@ -106,10 +108,10 @@ Override any `appsettings.json` setting via environment variable (double undersc
 
 | Variable                           | Default                  | Description                                                                                                                                             |
 | ---------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Translation__DefaultModel`        | `m2m100_418M`            | Translation model used when `model` field is empty in the request                                                                                       |
-| `Translation__AudioToText`         | `whisper-small`          | STT model key; set to `""` to disable `TranscribeAudio`                                                                                                 |
-| `Translation__AutoDetect`          | `lid-176-ftz`            | Language detection model key                                                                                                                            |
-| `Translation__AllowedModels__0`    | `m2m100_418M`            | First allowed translation model (array index)                                                                                                           |
+| `Translation__DefaultModel`        | `m2m100_1.2B`            | Translation model used when `model` field is empty in the request                                                                                       |
+| `Translation__AudioToText`         | `whisper-medium`         | STT model key; set to `""` to disable `TranscribeAudio`                                                                                                 |
+| `Translation__AutoDetect`          | `glotlid`                | Language detection model key                                                                                                                            |
+| `Translation__AllowedModels__0`    | `m2m100_1.2B`            | First allowed translation model; must include DefaultModel or requests will be rejected                                                                  |
 | `Translation__ModelTtlMinutes`     | `30`                     | Minutes idle before a loaded model is evicted from memory                                                                                               |
 | `Translation__TextToAudio__en`     | `piper-en-US`            | TTS voice key for English (ISO 639-1 code → model key)                                                                                                  |
 | `Translation__TextToAudio__ru`     | `piper-ru-Ruslan`        | TTS voice key for Russian                                                                                                                               |
