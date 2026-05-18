@@ -106,6 +106,10 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
         try
         {
+            // Use CancellationToken.None so that the full JSON file is always
+            // translated to completion, regardless of any client-side deadline.
+            // Individual per-string inference already respects a server-side
+            // TRANSLATE_TIMEOUT_MS if configured.
             var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
                 request.Json,
                 lease.Translator,
@@ -113,7 +117,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
                 targetLanguage,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
                 string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
-                context.CancellationToken);
+                CancellationToken.None);
 
             return new TranslateLocalizationResponse { Json = json, StringsTranslated = count };
         }
@@ -182,10 +186,19 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         var langFormat = ResolveLanguageFormat(request.LanguageFormat);
 
-        // Piper uses BCP-47 language codes (e.g. "en", "ru", "uk")
-        var language = string.IsNullOrWhiteSpace(request.Language)
-            ? string.Empty
-            : ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+        // Piper uses BCP-47 language codes (e.g. "en", "ru", "uk").
+        // When language is empty or "auto", detect it from the input text.
+        string language;
+        if (string.IsNullOrWhiteSpace(request.Language) ||
+            request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            var detection = _detector.Value.Detect(request.Text);
+            language = detection.ToFormat(LanguageCodeFormat.Bcp47);
+        }
+        else
+        {
+            language = ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+        }
 
         Core.Models.SynthesisResult result;
         try

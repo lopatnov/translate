@@ -24,6 +24,18 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
     // under concurrent live-translation load). Serialize with a semaphore.
     private readonly SemaphoreSlim _inferenceLock = new(1, 1);
 
+    // Server-side inference timeout, read once at startup.
+    // Set TRANSLATE_TIMEOUT_MS env var to impose a limit (ms).
+    // When unset: inference runs to completion regardless of the gRPC client deadline.
+    private static readonly TimeSpan? InferenceTimeout = ReadInferenceTimeout();
+    private static TimeSpan? ReadInferenceTimeout()
+    {
+        var raw = Environment.GetEnvironmentVariable("TRANSLATE_TIMEOUT_MS");
+        return int.TryParse(raw, out var ms) && ms > 0
+            ? TimeSpan.FromMilliseconds(ms)
+            : null;
+    }
+
     public M2M100Translator(IOptions<M2M100Options> options)
         : this(options.Value, null, null, null, null) { }
 
@@ -57,8 +69,16 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
         await _inferenceLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Use a server-side timeout token (if TRANSLATE_TIMEOUT_MS is set),
+            // otherwise CancellationToken.None — so inference always runs to completion
+            // regardless of the gRPC client deadline. The outer cancellationToken is still
+            // respected at two earlier checkpoints: ThrowIfCancellationRequested() above
+            // and WaitAsync(), plus Task.Run won't start if already cancelled.
+            using var inferenceCts = InferenceTimeout.HasValue
+                ? new CancellationTokenSource(InferenceTimeout.Value)
+                : new CancellationTokenSource();
             return await Task.Run(
-                () => Translate(text, sourceLanguage, targetLanguage, cancellationToken),
+                () => Translate(text, sourceLanguage, targetLanguage, inferenceCts.Token),
                 cancellationToken).ConfigureAwait(false);
         }
         finally
