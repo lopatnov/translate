@@ -59,8 +59,14 @@ public sealed class EspeakPhonemizerTests
                 RedirectStandardError  = true,
                 UseShellExecute        = false,
             });
-            p?.WaitForExit();
-            return p?.ExitCode == 0;
+            if (p is null) return false;
+            if (!p.WaitForExit(3_000))
+            {
+                p.Kill(entireProcessTree: true);
+                p.WaitForExit();
+                return false;
+            }
+            return p.ExitCode == 0;
         }
         catch
         {

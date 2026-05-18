@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Lopatnov.Translate.Piper;
@@ -19,6 +20,8 @@ namespace Lopatnov.Translate.Piper;
 /// On Windows: install from <c>https://github.com/espeak-ng/espeak-ng/releases</c>.
 /// </para>
 /// </summary>
+// espeak-ng is a subprocess dependency — integration-only, excluded from unit-test coverage.
+[ExcludeFromCodeCoverage]
 internal static class EspeakPhonemizer
 {
     /// <summary>

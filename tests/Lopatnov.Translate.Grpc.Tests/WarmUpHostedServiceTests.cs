@@ -75,7 +75,7 @@ public sealed class WarmUpHostedServiceTests
     public async Task ExecuteAsync_ReturnsImmediately_WhenWarmUpIsEmpty()
     {
         using var svc = Build([]);
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -88,7 +88,7 @@ public sealed class WarmUpHostedServiceTests
             warmUpModels: ["unknown-model"],
             config: new ConfigurationBuilder().Build());
 
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -104,7 +104,7 @@ public sealed class WarmUpHostedServiceTests
             warmUpModels: ["model1"],
             config: ConfigWithModelType("model1", modelType));
 
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -121,7 +121,7 @@ public sealed class WarmUpHostedServiceTests
             config: ConfigWithModelType("model1", modelType),
             manager: EmptyManager());
 
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -157,7 +157,7 @@ public sealed class WarmUpHostedServiceTests
             config: ConfigWithModelType("whisper-large", "Whisper"),
             audioToText: "whisper-small");
 
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -194,7 +194,7 @@ public sealed class WarmUpHostedServiceTests
             config: ConfigWithModelType("piper-de-DE", "Piper"),
             textToAudio: new Dictionary<string, string> { ["en"] = "piper-en-US" });
 
-        var ex = await Record.ExceptionAsync(() => RunAsync(svc));
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
         Assert.Null(ex);
     }
 
@@ -234,8 +234,10 @@ public sealed class WarmUpHostedServiceTests
 
         await svc.StartAsync(CancellationToken.None);
         if (svc.ExecuteTask is not null)
-            // TaskCanceledException is acceptable if ExecuteTask was cancelled.
-            await svc.ExecuteTask.ContinueWith(_ => { }, TaskContinuationOptions.None);
+        {
+            try { await svc.ExecuteTask; }
+            catch (OperationCanceledException) { /* expected when service is stopped externally */ }
+        }
         await svc.StopAsync(CancellationToken.None);
     }
 }
