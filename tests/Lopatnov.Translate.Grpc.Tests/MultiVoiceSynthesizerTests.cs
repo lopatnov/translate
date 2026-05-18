@@ -33,7 +33,8 @@ public sealed class MultiVoiceSynthesizerTests
             new Dictionary<string, PiperSynthesizer>());
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => sut.SynthesizeAsync("text", "en"));
+            () => sut.SynthesizeAsync("text", "en",
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
