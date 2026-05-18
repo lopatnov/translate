@@ -221,6 +221,54 @@ public sealed class WarmUpHostedServiceTests
             Times.Once);
     }
 
+    // ── NLLB warm-up UnauthorizedAccess path ─────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_SkipsModel_WhenTranslatorNotInAllowedList()
+    {
+        // ModelSessionManager.Get() throws UnauthorizedAccessException when a model is in
+        // _configured (factories) but NOT in allowedModels — covered by the catch at line 126.
+        var mockTranslator = new Mock<ITextTranslator>();
+        var manager = new ModelSessionManager(
+            new Dictionary<string, Func<ITextTranslator>>
+            {
+                ["nllb"] = () => mockTranslator.Object,
+            },
+            allowedModels: ["other-model"], // "nllb" is configured but not allowed
+            ttl: TimeSpan.FromMinutes(1));
+
+        using var svc = Build(
+            warmUpModels: ["nllb"],
+            config: ConfigWithModelType("nllb", "NLLB"),
+            manager: manager);
+
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
+        Assert.Null(ex);
+    }
+
+    // ── WarmUpOneAsync outer catch path ───────────────────────────────────────
+
+    [Fact]
+    public async Task ExecuteAsync_LogsWarningAndContinues_WhenWarmUpThrowsUnexpected()
+    {
+        // If TranslateAsync throws something other than KeyNotFoundException /
+        // UnauthorizedAccessException, it propagates up to WarmUpOneAsync which
+        // catches all non-cancellation exceptions and logs a warning.
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Model failed to load unexpectedly"));
+
+        using var svc = Build(
+            warmUpModels: ["nllb"],
+            config: ConfigWithModelType("nllb", "NLLB"),
+            manager: ManagerWith("nllb", mockTranslator.Object));
+
+        // Must NOT rethrow — the outer catch logs and moves on.
+        var ex = await Record.ExceptionAsync(() => RunAsync(svc, TestContext.Current.CancellationToken));
+        Assert.Null(ex);
+    }
+
     // ── Cancellation ──────────────────────────────────────────────────────────
 
     [Fact]
