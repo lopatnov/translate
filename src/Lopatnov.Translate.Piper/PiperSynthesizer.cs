@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -265,6 +266,8 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     // ONNX inference
     // -------------------------------------------------------------------------
 
+    // ONNX inference — requires a real loaded InferenceSession; excluded from unit-test coverage.
+    [ExcludeFromCodeCoverage]
     private static float[] RunInference(
         InferenceSession session,
         long[] phonemeIds,
@@ -377,6 +380,8 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
     // Lazy load + TTL eviction
     // -------------------------------------------------------------------------
 
+    // Session loading — requires a real .onnx model file; excluded from unit-test coverage.
+    [ExcludeFromCodeCoverage]
     private async Task<(InferenceSession session, PiperVoiceConfig config)> GetOrCreateSessionAsync(
         CancellationToken ct)
     {
@@ -424,6 +429,8 @@ public sealed class PiperSynthesizer : ISpeechSynthesizer, IDisposable
         }
     }
 
+    // Timer callback for TTL eviction — runs outside test context; excluded from unit-test coverage.
+    [ExcludeFromCodeCoverage]
     private void EvictIfIdle(object? state)
     {
         if (_disposed || Volatile.Read(ref _activeInferences) > 0)
