@@ -93,6 +93,7 @@ message TranslateAudioRequest {
   string audio_format = 4;
   string target_voice = 5;
   string language_format = 6; // format for source_language/target_language: "bcp47" (default), "flores200", "native"
+  string model = 7;           // name of the model entry from config (e.g. "m2m100_418M"); empty = default model
 }
 
 message TranslateAudioResponse {

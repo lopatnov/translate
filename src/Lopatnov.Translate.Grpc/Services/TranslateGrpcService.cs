@@ -290,7 +290,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         var targetFlores = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         string translatedText;
-        using (var lease = ResolveTranslator(string.Empty)) // default model
+        using (var lease = ResolveTranslator(request.Model))
         {
             try
             {
