@@ -20,11 +20,14 @@ git clone https://github.com/lopatnov/translate.git
 cd translate
 ```
 
-### 2. Download models
+### 2. Download models through huggingface-cli
 
 ```bash
 # Translation model (MIT, 100 languages)
 hf download lopatnov/m2m100_418M-onnx --local-dir ./models/translate/m2m100_418M
+
+# Language detection — required for auto-detect and DetectLanguage RPC (CC-BY-SA 3.0)
+hf download lopatnov/fasttext-language-id lid.176.bin --local-dir ./models/detect-lang/fasttext-language-id
 
 # Speech-to-text — Whisper small (~500 MB, MIT)
 hf download lopatnov/whisper.cpp ggml-small.bin --local-dir ./models/audio-to-text/whisper.cpp
