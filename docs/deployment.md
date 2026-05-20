@@ -30,19 +30,19 @@ brew install espeak-ng
 
 ```powershell
 # Translation model (Apache 2.0)
-huggingface-cli download lopatnov/m2m100_418M-onnx `
+hf download lopatnov/m2m100_418M-onnx `
   --local-dir ./models/translate/m2m100_418M
 
 # Language detection — required for source_language:"auto" and DetectLanguage RPC (CC-BY-SA 3.0)
-huggingface-cli download lopatnov/fasttext-language-id lid.176.ftz `
+hf download lopatnov/fasttext-language-id lid.176.ftz `
   --local-dir ./models/detect-lang/fasttext-language-id
 
 # Speech-to-text model (MIT)
-huggingface-cli download lopatnov/whisper.cpp ggml-small.bin `
+hf download lopatnov/whisper.cpp ggml-small.bin `
   --local-dir ./models/audio-to-text/whisper.cpp
 
 # Text-to-speech voices (MIT) — download the languages you need
-huggingface-cli download lopatnov/piper-voices `
+hf download lopatnov/piper-voices `
   en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json `
   --local-dir ./models/text-to-audio/piper-voices
 ```
@@ -111,7 +111,7 @@ Override any `appsettings.json` setting via environment variable (double undersc
 | `Translation__DefaultModel`        | `m2m100_1.2B`            | Translation model used when `model` field is empty in the request                                                                                       |
 | `Translation__AudioToText`         | `whisper-medium`         | STT model key; set to `""` to disable `TranscribeAudio`                                                                                                 |
 | `Translation__AutoDetect`          | `glotlid`                | Language detection model key                                                                                                                            |
-| `Translation__AllowedModels__0`    | `m2m100_1.2B`            | First allowed translation model; must include DefaultModel or requests will be rejected                                                                  |
+| `Translation__AllowedModels__0`    | `m2m100_1.2B`            | First allowed translation model; must include DefaultModel or requests will be rejected                                                                 |
 | `Translation__ModelTtlMinutes`     | `30`                     | Minutes idle before a loaded model is evicted from memory                                                                                               |
 | `Translation__TextToAudio__en`     | `piper-en-US`            | TTS voice key for English (ISO 639-1 code → model key)                                                                                                  |
 | `Translation__TextToAudio__ru`     | `piper-ru-Ruslan`        | TTS voice key for Russian                                                                                                                               |

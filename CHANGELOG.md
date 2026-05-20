@@ -92,7 +92,7 @@ All notable changes to Lopatnov.Translate are documented here.
 
 ### Notes
 
-- Model weights are **not included** — download them with `huggingface-cli` (see `docs/models.md`)
+- Model weights are **not included** — download them with `hf` (see `docs/models.md`)
 - NLLB-200 is licensed CC BY-NC 4.0 (non-commercial use only); M2M-100, Whisper, and Piper voices are MIT
 - espeak-ng is GPL v3 (called as a subprocess — does not affect this project's license)
 
@@ -130,5 +130,5 @@ Translation: up to 200 languages (NLLB-200).
 
 ### Notes
 
-- Model weights are **not included** — download via `huggingface-cli` (see `docs/models.md`)
+- Model weights are **not included** — download via `hf` (see `docs/models.md`)
 - NLLB-200 is licensed CC BY-NC 4.0 (non-commercial use only)
