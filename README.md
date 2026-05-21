@@ -20,7 +20,7 @@ git clone https://github.com/lopatnov/translate.git
 cd translate
 ```
 
-### 2. Download models through huggingface-cli
+### 2. Download models through hf
 
 ```bash
 # Translation model (MIT, 100 languages)
