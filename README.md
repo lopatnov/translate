@@ -20,17 +20,20 @@ git clone https://github.com/lopatnov/translate.git
 cd translate
 ```
 
-### 2. Download models
+### 2. Download models through hf
 
 ```bash
 # Translation model (MIT, 100 languages)
-huggingface-cli download lopatnov/m2m100_418M-onnx --local-dir ./models/translate/m2m100_418M
+hf download lopatnov/m2m100_418M-onnx --local-dir ./models/translate/m2m100_418M
+
+# Language detection — required for auto-detect and DetectLanguage RPC (CC-BY-SA 3.0)
+hf download lopatnov/fasttext-language-id lid.176.bin --local-dir ./models/detect-lang/fasttext-language-id
 
 # Speech-to-text — Whisper small (~500 MB, MIT)
-huggingface-cli download lopatnov/whisper.cpp ggml-small.bin --local-dir ./models/audio-to-text/whisper.cpp
+hf download lopatnov/whisper.cpp ggml-small.bin --local-dir ./models/audio-to-text/whisper.cpp
 
 # Text-to-speech — Piper English voice (MIT)
-huggingface-cli download lopatnov/piper-voices \
+hf download lopatnov/piper-voices \
   en_US/en_US-joe-medium.onnx en_US/en_US-joe-medium.onnx.json \
   --local-dir ./models/text-to-audio/piper-voices
 ```
@@ -97,12 +100,12 @@ See [docs/api.md](docs/api.md) for the full API reference.
 
 ## Documentation
 
-| Doc | Description |
-|---|---|
-| [docs/api.md](docs/api.md) | gRPC API reference — RPCs, messages, examples |
-| [docs/models.md](docs/models.md) | Model setup — download, configuration, licenses |
-| [docs/deployment.md](docs/deployment.md) | Docker deployment |
-| [docs/development.md](docs/development.md) | Local dev, build, testing |
+| Doc                                        | Description                                     |
+| ------------------------------------------ | ----------------------------------------------- |
+| [docs/api.md](docs/api.md)                 | gRPC API reference — RPCs, messages, examples   |
+| [docs/models.md](docs/models.md)           | Model setup — download, configuration, licenses |
+| [docs/deployment.md](docs/deployment.md)   | Docker deployment                               |
+| [docs/development.md](docs/development.md) | Local dev, build, testing                       |
 
 ---
 
@@ -126,7 +129,7 @@ tests/
   Lopatnov.Translate.Whisper.Tests/  # audio resampling, recognizer, integration
   Lopatnov.Translate.Piper.Tests/    # phonemizer, synthesizer, integration
 
-models/                              # gitignored — populate via huggingface-cli (see docs/models.md)
+models/                              # gitignored — populate via hf (see docs/models.md)
   translate/                         # M2M-100, NLLB ONNX files
   detect-lang/                       # FastText LID-176, GlotLID
   audio-to-text/                     # Whisper ggml files
