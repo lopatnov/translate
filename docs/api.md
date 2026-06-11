@@ -269,14 +269,14 @@ grpcurl -plaintext `
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 ```
 
-With explicit language and FLORES-200 response:
+With an explicit language:
 
 ```bash
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
   -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"uk\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
-# → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"ukr_Cyrl", "fullText":"Привіт"}
+# → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"uk", "fullText":"Привіт"}
 ```
 
 ---
