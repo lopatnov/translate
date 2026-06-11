@@ -221,4 +221,53 @@ public sealed class ModelSessionManagerTests
         var ex = Record.Exception(() => mgr.Dispose());
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void Rent_RetriesFactory_AfterLoadFailure()
+    {
+        // A failed load (e.g. model file missing) must not poison the entry forever:
+        // Lazy<T> caches the exception, and every Rent refreshes LastUsed so TTL
+        // eviction would never reclaim it. The manager must drop the failed entry
+        // so the next Rent retries the factory (e.g. after the model was downloaded).
+        var attempts = 0;
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new()
+        {
+            ["nllb"] = () =>
+            {
+                attempts++;
+                if (attempts == 1)
+                    throw new FileNotFoundException("model.onnx not found");
+                return mock.Object;
+            },
+        });
+
+        Assert.Throws<FileNotFoundException>(() => mgr.Rent("nllb"));
+
+        using var lease = mgr.Rent("nllb"); // must retry, not rethrow the cached exception
+        Assert.Same(mock.Object, lease.Translator);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public void Get_RetriesFactory_AfterLoadFailure()
+    {
+        var attempts = 0;
+        var mock = new Mock<ITextTranslator>();
+        using var mgr = Build(new()
+        {
+            ["nllb"] = () =>
+            {
+                attempts++;
+                if (attempts == 1)
+                    throw new FileNotFoundException("model.onnx not found");
+                return mock.Object;
+            },
+        });
+
+        Assert.Throws<FileNotFoundException>(() => mgr.Get("nllb"));
+
+        Assert.Same(mock.Object, mgr.Get("nllb"));
+        Assert.Equal(2, attempts);
+    }
 }

@@ -157,7 +157,21 @@ public sealed class ModelSessionManager : IDisposable
             var entry = _sessions.GetOrAdd(key, k => new Entry(_factories[k]));
             entry.LastUsed = DateTimeOffset.UtcNow;
 
-            var translator = entry.Translator; // blocks until model is loaded (Lazy<T>)
+            ITextTranslator translator;
+            try
+            {
+                translator = entry.Translator; // blocks until model is loaded (Lazy<T>)
+            }
+            catch
+            {
+                // Lazy<T> caches the load exception forever, and every access refreshes
+                // LastUsed so TTL eviction would never reclaim the poisoned entry.
+                // Drop it so the next call retries the factory (e.g. after the model
+                // file has been downloaded).
+                _sessions.TryRemove(KeyValuePair.Create(key, entry));
+                throw;
+            }
+
             if (!entry.Disposed)
                 return translator;
 
@@ -197,6 +211,10 @@ public sealed class ModelSessionManager : IDisposable
                     // Release the ref we just acquired so the entry does not
                     // accumulate a growing ref-count on every subsequent Rent().
                     entry.Release();
+                    // Lazy<T> caches the exception forever and every Rent refreshes
+                    // LastUsed, so TTL eviction would never reclaim the poisoned
+                    // entry. Drop it so the next Rent retries the factory.
+                    _sessions.TryRemove(KeyValuePair.Create(key, entry));
                     throw;
                 }
             }

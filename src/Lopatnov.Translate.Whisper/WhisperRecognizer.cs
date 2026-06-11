@@ -55,17 +55,19 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
         string language = "auto",
         CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        if (string.IsNullOrWhiteSpace(_options.ModelPath))
-            throw new InvalidOperationException(
-                "Whisper model path is not configured. " +
-                "Set Translation:AudioToText and the corresponding Models entry in appsettings.json.");
-
-        // Track active inferences so the eviction timer won't dispose the factory mid-run.
+        // Increment BEFORE the disposed check so Dispose() can spin-wait on
+        // _activeInferences == 0 and be certain no new inference starts after it
+        // sets _disposed = true. (Same ordering as PiperSynthesizer.)
         Interlocked.Increment(ref _activeInferences);
         try
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (string.IsNullOrWhiteSpace(_options.ModelPath))
+                throw new InvalidOperationException(
+                    "Whisper model path is not configured. " +
+                    "Set Translation:AudioToText and the corresponding Models entry in appsettings.json.");
+
             // Ensure factory is loaded (lazy init under lock).
             var factory = await GetOrCreateFactoryAsync(cancellationToken);
 
@@ -286,6 +288,14 @@ public sealed class WhisperRecognizer : ISpeechRecognizer, IDisposable
         _disposed = true;
 
         _evictionTimer.Dispose();
+
+        // Drain in-flight transcriptions before disposing the factory: ProcessAsync
+        // runs outside _lock, so waiting on the lock alone is not enough. _disposed
+        // is already true, so no new TranscribeAsync call can pass its guard.
+        // (Same pattern as PiperSynthesizer.Dispose.)
+        var sw = new SpinWait();
+        while (Volatile.Read(ref _activeInferences) > 0)
+            sw.SpinOnce();
 
         _lock.Wait();
         try

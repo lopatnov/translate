@@ -30,7 +30,7 @@ foreach (var (name, cfg) in rawModels)
     if (!ModelType.IsKnown(cfg.Type))
         throw new InvalidOperationException(
             $"Configuration error: Models:{name}:Type value '{cfg.Type}' is unknown. " +
-            "Known: NLLB, M2M100, FastText, LibreTranslate, Whisper.");
+            "Known: NLLB, M2M100, FastText, LibreTranslate, Whisper, Piper, Redirect.");
 }
 
 // --- Validate Translation references ---
