@@ -110,6 +110,45 @@ public sealed class LanguageCodeConverterTests
         Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", format, "bcp47"));
     }
 
+    // ── BCP-47 primary-subtag fallback (en-US → en → eng_Latn) ────────────────
+
+    [Theory]
+    [InlineData("en-US", "eng_Latn")]
+    [InlineData("de-DE", "deu_Latn")]
+    [InlineData("uk-UA", "ukr_Cyrl")]
+    public void Convert_Bcp47WithRegionSubtag_ResolvesViaPrimarySubtag(string bcp47, string expectedFlores)
+    {
+        Assert.Equal(expectedFlores, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200));
+    }
+
+    // ── ISO 639-3 (incl. GlotLID script-suffixed labels) → BCP-47 ─────────────
+
+    [Theory]
+    [InlineData("eng",      "en")]
+    [InlineData("ukr",      "uk")]
+    [InlineData("nob",      "nb")]
+    [InlineData("zho",      "zh-Hans")]
+    [InlineData("ukr_Cyrl", "uk")]      // GlotLID v3 label: ISO 639-3 + script
+    [InlineData("eng_Latn", "en")]      // GlotLID v3 label: ISO 639-3 + script
+    [InlineData("ceb",      "ceb")]     // no 2-letter code — passes through as valid BCP-47
+    public void Convert_Iso639_3ToBcp47_ReturnsCorrectCode(string iso, string expectedBcp47)
+    {
+        Assert.Equal(expectedBcp47, LanguageCodeConverter.Convert(iso, LanguageCodeFormat.ISO639_3, LanguageCodeFormat.Bcp47));
+    }
+
+    // ── BCP-47 → ISO 639-1 (model adapters: M2M-100, LibreTranslate) ──────────
+
+    [Theory]
+    [InlineData("en",      "en")]
+    [InlineData("zh-Hans", "zh")]
+    [InlineData("zh-Hant", "zh")]
+    [InlineData("yue",     "zh")]
+    [InlineData("en-US",   "en")]
+    public void Convert_Bcp47ToIso639_1_ReturnsCorrectCode(string bcp47, string expectedIso)
+    {
+        Assert.Equal(expectedIso, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.ISO639_1));
+    }
+
     // ── LanguageDetectionResult computed properties ───────────────────────────
 
     [Fact]
@@ -117,10 +156,20 @@ public sealed class LanguageCodeConverterTests
     {
         var result = new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200);
         Assert.Equal("uk", result.Bcp47);
-        Assert.Equal("ukr_Cyrl", result.Flores200);
+        // "native" must return the model's real raw label, untouched.
         Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Native));
         Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Flores200));
         Assert.Equal("uk", result.ToFormat(LanguageCodeFormat.Bcp47));
+    }
+
+    [Fact]
+    public void DetectionResult_GlotLidIso639_3Label_NativePreservedBcp47Normalised()
+    {
+        // GlotLID v3 emits ISO 639-3 + script labels; native keeps the raw label,
+        // Bcp47 normalises for downstream translation.
+        var result = new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.ISO639_3);
+        Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Native));
+        Assert.Equal("uk", result.Bcp47);
     }
 
     [Fact]
@@ -128,6 +177,6 @@ public sealed class LanguageCodeConverterTests
     {
         var result = new LanguageDetectionResult("uk", LanguageCodeFormat.Bcp47);
         Assert.Equal("uk", result.Bcp47);
-        Assert.Equal("ukr_Cyrl", result.Flores200);
+        Assert.Equal("ukr_Cyrl", result.ToFormat(LanguageCodeFormat.Flores200));
     }
 }

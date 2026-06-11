@@ -10,7 +10,7 @@ public sealed class M2M100TokenizerTests
     {
         var tokenizer = new FakeM2M100Tokenizer();
 
-        var ids = tokenizer.Encode("hello", "eng_Latn");
+        var ids = tokenizer.Encode("hello", "en");
 
         // M2M-100 format: [src_lang_token, tokens..., EOS]
         Assert.Equal(FakeM2M100Tokenizer.EnLangId, ids[0]);
@@ -18,11 +18,12 @@ public sealed class M2M100TokenizerTests
     }
 
     [Fact]
-    public void Encode_AcceptsIsoCodes()
+    public void Encode_AcceptsBcp47RegionSubtag()
     {
         var tokenizer = new FakeM2M100Tokenizer();
 
-        var ids = tokenizer.Encode("hello", "en");
+        // "en-US" collapses to the model's "en" token via the primary subtag.
+        var ids = tokenizer.Encode("hello", "en-US");
 
         Assert.Equal(FakeM2M100Tokenizer.EnLangId, ids[0]);
     }
@@ -33,7 +34,7 @@ public sealed class M2M100TokenizerTests
         var tokenizer = new FakeM2M100Tokenizer();
         var original = "hello";
 
-        var ids = tokenizer.Encode(original, "eng_Latn");
+        var ids = tokenizer.Encode(original, "en");
         // Skip lang token and EOS, then decode
         var decoded = tokenizer.Decode(ids.Skip(1).SkipLast(1));
 
@@ -49,14 +50,16 @@ public sealed class M2M100TokenizerTests
     }
 
     [Fact]
-    public void GetLanguageTokenId_MapsFloresToIso()
+    public void GetLanguageTokenId_Bcp47AndNativeIsoResolveToSameToken()
     {
         var tokenizer = new FakeM2M100Tokenizer();
 
-        var flores = tokenizer.GetLanguageTokenId("ukr_Cyrl");
-        var iso = tokenizer.GetLanguageTokenId("uk");
+        // "uk" is both the BCP-47 tag and M2M-100's native ISO 639-1 code;
+        // a region-qualified BCP-47 tag must resolve to the same token.
+        var native = tokenizer.GetLanguageTokenId("uk");
+        var regional = tokenizer.GetLanguageTokenId("uk-UA");
 
-        Assert.Equal(flores, iso);
+        Assert.Equal(native, regional);
     }
 }
 
@@ -76,14 +79,6 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
         ["ru"] = RuLangId,
     };
 
-    // Mirrors M2M100Tokenizer.FlorestoIso for the languages used in tests.
-    private static readonly Dictionary<string, string> FlorestoIso = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["eng_Latn"] = "en",
-        ["ukr_Cyrl"] = "uk",
-        ["rus_Cyrl"] = "ru",
-    };
-
     public long[] Encode(string text, string sourceLanguage)
     {
         var langId = GetLanguageTokenId(sourceLanguage);
@@ -101,10 +96,13 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
         return new string(chars.ToArray());
     }
 
+    // Mirrors M2M100Tokenizer.GetLanguageTokenId: exact match, then primary subtag.
     public long GetLanguageTokenId(string languageCode)
     {
-        var isoCode = FlorestoIso.TryGetValue(languageCode, out var iso) ? iso : languageCode;
-        if (IsoIds.TryGetValue(isoCode, out var id))
+        if (IsoIds.TryGetValue(languageCode, out var id))
+            return id;
+        var dash = languageCode.IndexOf('-');
+        if (dash > 0 && IsoIds.TryGetValue(languageCode[..dash], out id))
             return id;
         throw new ArgumentException($"Unknown language code: '{languageCode}'", nameof(languageCode));
     }

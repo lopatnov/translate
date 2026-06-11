@@ -139,9 +139,10 @@ internal sealed class WarmUpHostedService : BackgroundService
             return;
         }
 
-        // Minimal translation: single space, English → French (FLORES-200 codes).
+        // Minimal translation: single space, English → French (BCP-47 codes; each
+        // adapter converts to its model-native codes internally).
         // This exercises the full pipeline: tokenisation → encoder → decoder → detokenisation.
-        _ = await translator.TranslateAsync(" ", "eng_Latn", "fra_Latn", ct);
+        _ = await translator.TranslateAsync(" ", "en", "fr", ct);
     }
 
     private async Task WarmUpWhisperAsync(string name, CancellationToken ct)

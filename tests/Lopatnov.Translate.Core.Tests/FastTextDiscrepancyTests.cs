@@ -9,6 +9,9 @@ namespace Lopatnov.Translate.Core.Tests;
 /// Python reference results captured on 2026-05-17 via:
 ///   wsl bash -ic "conda activate fasttext && python -c 'import fasttext; ...'"
 ///
+/// Comparison is on the models' raw native labels (ISO 639-1 for LID-176,
+/// ISO 639-3 + script for GlotLID v3) — the detector must preserve them untouched.
+///
 /// Run: dotnet test --filter "FastTextDiscrepancy&amp;Category=Integration"
 /// </summary>
 public sealed class FastTextDiscrepancyTests
@@ -26,21 +29,19 @@ public sealed class FastTextDiscrepancyTests
         AppContext.BaseDirectory, "..", "..", "..", "..", "..",
         "models", "detect-lang", "glotlid", "model_v3.bin"));
 
-    // ── Python reference top-1 results ────────────────────────────────────────
-    // Format: (inputText, expectedFlores200)
-    // lid-176 ISO 639-1 labels are converted to FLORES-200 for comparison.
+    // ── Python reference top-1 results (raw model labels) ────────────────────
 
-    private static readonly (string Text, string PyFlores)[] s_lid176 =
+    private static readonly (string Text, string PyLabel)[] s_lid176 =
     [
-        ("Hello, how are you today?",                   "eng_Latn"),
-        ("Привет как дела",                             "rus_Cyrl"),
-        ("Bonjour le monde",                            "fra_Latn"),
-        ("Hola como estas",                             "spa_Latn"),
-        ("Сьогодні чудова погода",                      "ukr_Cyrl"),
-        ("The quick brown fox jumps over the lazy dog", "eng_Latn"),
+        ("Hello, how are you today?",                   "en"),
+        ("Привет как дела",                             "ru"),
+        ("Bonjour le monde",                            "fr"),
+        ("Hola como estas",                             "es"),
+        ("Сьогодні чудова погода",                      "uk"),
+        ("The quick brown fox jumps over the lazy dog", "en"),
     ];
 
-    private static readonly (string Text, string PyFlores)[] s_glotlid =
+    private static readonly (string Text, string PyLabel)[] s_glotlid =
     [
         ("Hello, how are you today?",                   "eng_Latn"),
         ("Привет как дела",                             "rus_Cyrl"),
@@ -55,7 +56,7 @@ public sealed class FastTextDiscrepancyTests
     [Theory]
     [Trait("Category", "Integration")]
     [MemberData(nameof(Lid176Data))]
-    public void Lid176Bin_MatchesPython(string text, string pyFlores)
+    public void Lid176Bin_MatchesPython(string text, string pyLabel)
     {
         if (!File.Exists(Lid176BinPath))
             Assert.Skip($"LID-176 full model not found at '{Lid176BinPath}'.");
@@ -67,9 +68,9 @@ public sealed class FastTextDiscrepancyTests
                 LabelPrefix = "__label__",
             });
 
-        string got = det.Detect(text).Flores200;
-        Assert.True(got == pyFlores,
-            $"lid.176.bin DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyFlores}");
+        string got = det.Detect(text).NativeCode;
+        Assert.True(got == pyLabel,
+            $"lid.176.bin DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyLabel}");
     }
 
     // ── lid.176.ftz (loss=hs, quantized) ─────────────────────────────────────
@@ -77,7 +78,7 @@ public sealed class FastTextDiscrepancyTests
     [Theory]
     [Trait("Category", "Integration")]
     [MemberData(nameof(Lid176Data))]
-    public void Lid176Ftz_MatchesPython(string text, string pyFlores)
+    public void Lid176Ftz_MatchesPython(string text, string pyLabel)
     {
         if (!File.Exists(Lid176FtzPath))
             Assert.Skip($"LID-176 compressed model not found at '{Lid176FtzPath}'.");
@@ -89,9 +90,9 @@ public sealed class FastTextDiscrepancyTests
                 LabelPrefix = "__label__",
             });
 
-        string got = det.Detect(text).Flores200;
-        Assert.True(got == pyFlores,
-            $"lid.176.ftz DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyFlores}");
+        string got = det.Detect(text).NativeCode;
+        Assert.True(got == pyLabel,
+            $"lid.176.ftz DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyLabel}");
     }
 
     // ── GlotLID v3 (loss=ova, full precision) ────────────────────────────────
@@ -99,7 +100,7 @@ public sealed class FastTextDiscrepancyTests
     [Theory]
     [Trait("Category", "Integration")]
     [MemberData(nameof(GlotlidData))]
-    public void Glotlid_MatchesPython(string text, string pyFlores)
+    public void Glotlid_MatchesPython(string text, string pyLabel)
     {
         if (!File.Exists(GlotlidPath))
             Assert.Skip($"GlotLID model not found at '{GlotlidPath}'.");
@@ -107,13 +108,14 @@ public sealed class FastTextDiscrepancyTests
         var det = FastTextLanguageDetector.Load(GlotlidPath,
             new FastTextLanguageDetectorSettings
             {
-                LabelFormat = LanguageCodeFormat.Flores200,
+                // GlotLID v3 labels are ISO 639-3 codes with a script suffix.
+                LabelFormat = LanguageCodeFormat.ISO639_3,
                 LabelPrefix = "__label__",
             });
 
-        string got = det.Detect(text).Flores200;
-        Assert.True(got == pyFlores,
-            $"GlotLID DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyFlores}");
+        string got = det.Detect(text).NativeCode;
+        Assert.True(got == pyLabel,
+            $"GlotLID DISCREPANCY\n  text   : \"{text}\"\n  .NET   : {got}\n  python : {pyLabel}");
     }
 
     // ── MemberData ────────────────────────────────────────────────────────────
@@ -123,7 +125,7 @@ public sealed class FastTextDiscrepancyTests
         get
         {
             var data = new TheoryData<string, string>();
-            foreach (var (text, pyFlores) in s_lid176) data.Add(text, pyFlores);
+            foreach (var (text, pyLabel) in s_lid176) data.Add(text, pyLabel);
             return data;
         }
     }
@@ -133,7 +135,7 @@ public sealed class FastTextDiscrepancyTests
         get
         {
             var data = new TheoryData<string, string>();
-            foreach (var (text, pyFlores) in s_glotlid) data.Add(text, pyFlores);
+            foreach (var (text, pyLabel) in s_glotlid) data.Add(text, pyLabel);
             return data;
         }
     }

@@ -46,7 +46,7 @@ public sealed class GrpcRedirectTranslatorTests
         using var sut = Build(detector, WithHeader("cycle-id"));
 
         var ex = await Assert.ThrowsAsync<RpcException>(
-            () => sut.TranslateAsync("text", "eng_Latn", "fra_Latn",
+            () => sut.TranslateAsync("text", "en", "fr",
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(StatusCode.FailedPrecondition, ex.StatusCode);
@@ -68,7 +68,7 @@ public sealed class GrpcRedirectTranslatorTests
         using var sut = Build(detector, WithHeader(requestId));
 
         var ex = await Assert.ThrowsAsync<RpcException>(
-            () => sut.TranslateAsync("text", "eng_Latn", "fra_Latn",
+            () => sut.TranslateAsync("text", "en", "fr",
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(StatusCode.FailedPrecondition, ex.StatusCode);
@@ -85,7 +85,7 @@ public sealed class GrpcRedirectTranslatorTests
         using var sut = Build(detector, NoContext());
 
         var ex = await Assert.ThrowsAsync<RpcException>(
-            () => sut.TranslateAsync("text", "eng_Latn", "fra_Latn",
+            () => sut.TranslateAsync("text", "en", "fr",
                 TestContext.Current.CancellationToken));
 
         // Any RPC status is acceptable — the server is simply unreachable.

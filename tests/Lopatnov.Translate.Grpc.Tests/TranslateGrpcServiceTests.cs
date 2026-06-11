@@ -37,10 +37,11 @@ public sealed class TranslateGrpcServiceTests
         var svc = new TranslateGrpcService(SingleProviderManager(provider, mockTranslator.Object), NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts(provider));
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
+        // "native" format: model-specific codes pass through to the translator unchanged.
         var response = await svc.TranslateText(new TranslateTextRequest
         {
             Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
-            Model = provider, LanguageFormat = "flores200",
+            Model = provider, LanguageFormat = "native",
         }, ctx.Object);
 
         Assert.Equal("translated", response.TranslatedText);
@@ -63,8 +64,7 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
-            LanguageFormat = "flores200",
+            Text = "hello", SourceLanguage = "en", TargetLanguage = "uk",
         }, ctx.Object);
 
         Assert.Equal("nllb", response.ModelUsed);
@@ -104,8 +104,8 @@ public sealed class TranslateGrpcServiceTests
         var ex = await Assert.ThrowsAsync<RpcException>(() =>
             svc.TranslateText(new TranslateTextRequest
             {
-                Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
-                Model = "m2m100", LanguageFormat = "flores200",
+                Text = "hello", SourceLanguage = "en", TargetLanguage = "uk",
+                Model = "m2m100",
             }, ctx.Object));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
@@ -129,46 +129,53 @@ public sealed class TranslateGrpcServiceTests
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), NoRecognizer, NoSynthesizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
-        // LanguageFormat = "bcp47" → detected_language in response is BCP-47.
+        // LanguageFormat = "bcp47" → detected_language in response is BCP-47, and the
+        // detected source is normalised to BCP-47 before reaching the translator.
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "eng_Latn",
+            Text = "hello", SourceLanguage = sourceLanguage, TargetLanguage = "en",
             Model = "nllb", LanguageFormat = "bcp47",
         }, ctx.Object);
 
         mockDetector.Verify(d => d.Detect("hello"), Times.Once);
         Assert.Equal("uk", response.DetectedLanguage);
         mockTranslator.Verify(
-            t => t.TranslateAsync("hello", "ukr_Cyrl", "eng_Latn", It.IsAny<CancellationToken>()),
+            t => t.TranslateAsync("hello", "uk", "en", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task TranslateText_CallsDetector_Flores200Format_PreservesFloresInResponse()
+    public async Task TranslateText_CallsDetector_NativeFormat_ReturnsRawDetectorLabel()
     {
         var mockTranslator = new Mock<ITextTranslator>();
         mockTranslator
             .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("translated");
 
+        // GlotLID-style detector: raw native label is ISO 639-3 + script.
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("hello"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.ISO639_3));
 
         var svc = new TranslateGrpcService(SingleProviderManager("nllb", mockTranslator.Object), WithDetector(mockDetector.Object), NoRecognizer, NoSynthesizer, TranslationOpts());
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = "auto", TargetLanguage = "eng_Latn",
-            Model = "nllb", LanguageFormat = "flores200",
+            Text = "hello", SourceLanguage = "auto", TargetLanguage = "en",
+            Model = "nllb", LanguageFormat = "native",
         }, ctx.Object);
 
+        // native → the detector's real raw label, untouched.
         Assert.Equal("ukr_Cyrl", response.DetectedLanguage);
+        // The translator still receives the BCP-47-normalised detected source.
+        mockTranslator.Verify(
+            t => t.TranslateAsync("hello", "uk", "en", It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task TranslateText_ConvertsBcp47InputToFlores200ForTranslator()
+    public async Task TranslateText_PassesBcp47CodesToTranslatorUnchanged()
     {
         var mockTranslator = new Mock<ITextTranslator>();
         mockTranslator
@@ -184,9 +191,32 @@ public sealed class TranslateGrpcServiceTests
             Model = "nllb", LanguageFormat = "bcp47",
         }, ctx.Object);
 
+        // BCP-47 codes go to the translator as-is — each adapter converts to its
+        // model-native codes internally.
         mockTranslator.Verify(
-            t => t.TranslateAsync("Hello", "eng_Latn", "ukr_Cyrl", It.IsAny<CancellationToken>()),
+            t => t.TranslateAsync("Hello", "en", "uk", It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Theory]
+    [InlineData("flores200")]
+    [InlineData("iso639-1")]
+    [InlineData("iso639-3")]
+    [InlineData("klingon")]
+    public async Task TranslateText_ThrowsInvalidArgument_ForUnsupportedLanguageFormat(string format)
+    {
+        var svc = new TranslateGrpcService(SingleProviderManager("nllb", new Mock<ITextTranslator>().Object), NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateText(new TranslateTextRequest
+            {
+                Text = "hello", SourceLanguage = "en", TargetLanguage = "uk",
+                Model = "nllb", LanguageFormat = format,
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
+        Assert.Contains("language_format", ex.Status.Detail);
     }
 
     [Fact]
@@ -204,8 +234,8 @@ public sealed class TranslateGrpcServiceTests
 
         var response = await svc.TranslateText(new TranslateTextRequest
         {
-            Text = "hello", SourceLanguage = "eng_Latn", TargetLanguage = "ukr_Cyrl",
-            Model = "nllb", LanguageFormat = "flores200",
+            Text = "hello", SourceLanguage = "en", TargetLanguage = "uk",
+            Model = "nllb",
         }, ctx.Object);
 
         mockDetector.Verify(d => d.Detect(It.IsAny<string>()), Times.Never);
@@ -233,11 +263,12 @@ public sealed class TranslateGrpcServiceTests
     }
 
     [Fact]
-    public async Task DetectLanguage_ReturnsFlores200_WhenRequested()
+    public async Task DetectLanguage_ReturnsRawNativeLabel_WhenNativeRequested()
     {
+        // GlotLID-style detector: native label is ISO 639-3 + script ("ukr_Cyrl").
         var mockDetector = new Mock<ILanguageDetector>();
         mockDetector.Setup(d => d.Detect("Привіт"))
-            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.Flores200));
+            .Returns(new LanguageDetectionResult("ukr_Cyrl", LanguageCodeFormat.ISO639_3));
 
         var svc = new TranslateGrpcService(
             SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
@@ -248,10 +279,30 @@ public sealed class TranslateGrpcServiceTests
         var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
 
         var response = await svc.DetectLanguage(
-            new DetectLanguageRequest { Text = "Привіт", LanguageFormat = "flores200" },
+            new DetectLanguageRequest { Text = "Привіт", LanguageFormat = "native" },
             ctx.Object);
 
+        // The model's real raw label, untouched.
         Assert.Equal("ukr_Cyrl", response.Language);
+    }
+
+    [Fact]
+    public async Task DetectLanguage_ThrowsInvalidArgument_ForFlores200Format()
+    {
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", new Mock<ITextTranslator>().Object),
+            WithDetector(new Mock<ILanguageDetector>().Object),
+            NoRecognizer,
+            NoSynthesizer,
+            TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.DetectLanguage(
+                new DetectLanguageRequest { Text = "Привіт", LanguageFormat = "flores200" },
+                ctx.Object));
+
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
 
     // ── TranscribeAudio ───────────────────────────────────────────────────────
@@ -716,9 +767,8 @@ public sealed class TranslateGrpcServiceTests
         var response = await svc.TranslateLocalization(new TranslateLocalizationRequest
         {
             Json           = """{"greeting": "Hello"}""",
-            SourceLanguage = "eng_Latn",
-            TargetLanguage = "ukr_Cyrl",
-            LanguageFormat = "flores200",
+            SourceLanguage = "en",
+            TargetLanguage = "uk",
         }, ctx.Object);
 
         Assert.Equal(1, response.StringsTranslated);
@@ -738,9 +788,8 @@ public sealed class TranslateGrpcServiceTests
             svc.TranslateLocalization(new TranslateLocalizationRequest
             {
                 Json           = "this is not json {{{",
-                SourceLanguage = "eng_Latn",
-                TargetLanguage = "ukr_Cyrl",
-                LanguageFormat = "flores200",
+                SourceLanguage = "en",
+                TargetLanguage = "uk",
             }, ctx.Object));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);

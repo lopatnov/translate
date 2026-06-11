@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Lopatnov.Translate.Core.Abstractions;
+using Lopatnov.Translate.Core.LanguageDetectors;
 using Microsoft.Extensions.Options;
 
 namespace Lopatnov.Translate.LibreTranslate;
@@ -35,48 +36,13 @@ public sealed class LibreTranslateClient : ITextTranslator
         return result.TranslatedText;
     }
 
-    // LibreTranslate expects ISO 639-1 codes (e.g. "en"), not FLORES-200 (e.g. "eng_Latn").
-    // Unknown codes (including "auto") pass through unchanged — LibreTranslate accepts "auto"
-    // natively as source language, triggering its own server-side language detection.
-    internal static string ToIso(string flores) =>
-        FloresIsoCodes.TryGetValue(flores, out var iso) ? iso : flores;
-
-    private static readonly Dictionary<string, string> FloresIsoCodes =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["eng_Latn"] = "en",
-            ["ukr_Cyrl"] = "uk",
-            ["rus_Cyrl"] = "ru",
-            ["deu_Latn"] = "de",
-            ["fra_Latn"] = "fr",
-            ["spa_Latn"] = "es",
-            ["pol_Latn"] = "pl",
-            ["por_Latn"] = "pt",
-            ["ita_Latn"] = "it",
-            ["nld_Latn"] = "nl",
-            ["zho_Hans"] = "zh",
-            ["zho_Hant"] = "zh",
-            ["jpn_Jpan"] = "ja",
-            ["kor_Hang"] = "ko",
-            ["arb_Arab"] = "ar",
-            ["hin_Deva"] = "hi",
-            ["tur_Latn"] = "tr",
-            ["vie_Latn"] = "vi",
-            ["tha_Thai"] = "th",
-            ["swe_Latn"] = "sv",
-            ["dan_Latn"] = "da",
-            ["fin_Latn"] = "fi",
-            ["ces_Latn"] = "cs",
-            ["ron_Latn"] = "ro",
-            ["hun_Latn"] = "hu",
-            ["bul_Cyrl"] = "bg",
-            ["hrv_Latn"] = "hr",
-            ["slk_Latn"] = "sk",
-            ["slv_Latn"] = "sl",
-            ["lit_Latn"] = "lt",
-            ["lvs_Latn"] = "lv",
-            ["est_Latn"] = "et",
-        };
+    // LibreTranslate's native codes are ISO 639-1 (e.g. "en"). Convert from BCP-47
+    // (the system interchange format): "en" stays "en", "zh-Hans" collapses to "zh",
+    // "en-US" collapses to "en". Unknown codes (including "auto") pass through
+    // unchanged — LibreTranslate accepts "auto" natively as source language,
+    // triggering its own server-side language detection.
+    internal static string ToIso(string bcp47) =>
+        LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.ISO639_1);
 
     private sealed record LibreTranslateResponse([property: JsonPropertyName("translatedText")] string TranslatedText);
 }

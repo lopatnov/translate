@@ -79,8 +79,9 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
         var headers = new Metadata { { RedirectIdHeader, requestId } };
         try
         {
-            // sourceLanguage / targetLanguage are already FLORES-200 at this
-            // point (TranslateGrpcService converts them before calling TranslateAsync).
+            // sourceLanguage / targetLanguage arrive as BCP-47 (the system interchange
+            // format) — forward them as-is and let the remote instance's model adapter
+            // convert to its own native codes.
             var response = await _client.TranslateTextAsync(
                 new TranslateTextRequest
                 {
@@ -88,7 +89,7 @@ public sealed class GrpcRedirectTranslator : ITextTranslator, IDisposable
                     SourceLanguage = sourceLanguage,
                     TargetLanguage = targetLanguage,
                     Model = _remoteModelName,
-                    LanguageFormat = "flores200",
+                    LanguageFormat = "bcp47",
                 },
                 headers,
                 cancellationToken: cancellationToken);

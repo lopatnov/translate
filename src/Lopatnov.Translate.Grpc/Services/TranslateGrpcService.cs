@@ -7,6 +7,16 @@ using System.Text.Json;
 
 namespace Lopatnov.Translate.Grpc.Services;
 
+/// <summary>
+/// gRPC front-end for the translation cascade.
+/// <para>
+/// Language codes: the API accepts <c>language_format</c> of <c>"bcp47"</c> (default) or
+/// <c>"native"</c>. BCP-47 is the system-wide interchange format — requests pass codes
+/// straight to the engines, and each model adapter converts BCP-47 to its native codes
+/// internally. With <c>"native"</c> the caller supplies codes the target engine understands
+/// natively (e.g. FLORES-200 for NLLB) and detection results return the detector's raw label.
+/// </para>
+/// </summary>
 public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 {
     private readonly ModelSessionManager _manager;
@@ -36,21 +46,14 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
 
         var langFormat = ResolveLanguageFormat(request.LanguageFormat);
         var sourceLanguage = request.SourceLanguage;
-        string? detectedFlores = null;
+        LanguageDetectionResult? detection = null;
 
         if (string.IsNullOrWhiteSpace(sourceLanguage) ||
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            var detection = _detector.Value.Detect(request.Text);
-            detectedFlores = detection.Flores200;
-            sourceLanguage = detectedFlores;
+            detection = _detector.Value.Detect(request.Text);
+            sourceLanguage = detection.Bcp47;
         }
-        else
-        {
-            sourceLanguage = ConvertLanguageCode(sourceLanguage, langFormat, LanguageCodeFormat.Flores200);
-        }
-
-        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
 
         string translated;
         try
@@ -58,24 +61,19 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             translated = await lease.Translator.TranslateAsync(
                 request.Text,
                 sourceLanguage,
-                targetLanguage,
+                request.TargetLanguage,
                 context.CancellationToken);
         }
         catch (ArgumentException ex)
         {
-            // Thrown by the tokenizer when a language code (e.g. nno_Latn for
-            // Norwegian Nynorsk) is not in the model's vocabulary.
+            // Thrown by the model adapter when a language code is not in its vocabulary.
             throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
         }
-
-        var detectedInFormat = detectedFlores != null
-            ? ConvertLanguageCode(detectedFlores, LanguageCodeFormat.Flores200, langFormat)
-            : string.Empty;
 
         return new TranslateTextResponse
         {
             TranslatedText = translated,
-            DetectedLanguage = detectedInFormat,
+            DetectedLanguage = detection?.ToFormat(langFormat) ?? string.Empty,
             ModelUsed = lease.Key,
         };
     }
@@ -100,9 +98,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     {
         using var lease = ResolveTranslator(request.Model);
 
-        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
-        var sourceLanguage = ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
-        var targetLanguage = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
+        ResolveLanguageFormat(request.LanguageFormat); // validate even though codes pass through
 
         try
         {
@@ -113,8 +109,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             var (json, count) = await JsonLocalizationTranslator.TranslateAsync(
                 request.Json,
                 lease.Translator,
-                sourceLanguage,
-                targetLanguage,
+                request.SourceLanguage,
+                request.TargetLanguage,
                 string.IsNullOrWhiteSpace(request.ExistingTranslation) ? null : request.ExistingTranslation,
                 string.IsNullOrWhiteSpace(request.Context) ? null : request.Context,
                 CancellationToken.None);
@@ -124,6 +120,10 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         catch (JsonException ex)
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Invalid JSON in request: {ex.Message}"));
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
         }
     }
 
@@ -142,13 +142,13 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranscribeAudioResponse> TranscribeAudio(
         TranscribeAudioRequest request, ServerCallContext context)
     {
-        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        ResolveLanguageFormat(request.LanguageFormat); // validate; Whisper's native codes are BCP-47
 
-        // Whisper uses BCP-47 language codes natively (e.g. "en", "ru", "de").
+        // Whisper uses BCP-47 language codes natively (e.g. "en", "ru").
         var inputLanguage = string.IsNullOrWhiteSpace(request.Language) ||
                             request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase)
             ? "auto"
-            : ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
+            : request.Language;
 
         Core.Models.TranscriptionResult result;
         try
@@ -163,13 +163,9 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
 
-        var detectedInFormat = !string.IsNullOrEmpty(result.DetectedLanguage)
-            ? ConvertLanguageCode(result.DetectedLanguage, LanguageCodeFormat.Bcp47, langFormat)
-            : string.Empty;
-
         var response = new TranscribeAudioResponse
         {
-            DetectedLanguage = detectedInFormat,
+            DetectedLanguage = string.IsNullOrEmpty(result.DetectedLanguage) ? string.Empty : result.DetectedLanguage,
             FullText         = result.FullText,
         };
         response.Segments.AddRange(result.Segments.Select(s => new TranscriptionSegment
@@ -184,21 +180,14 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<SynthesizeSpeechResponse> SynthesizeSpeech(
         SynthesizeSpeechRequest request, ServerCallContext context)
     {
-        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        ResolveLanguageFormat(request.LanguageFormat); // validate; Piper voices are keyed by BCP-47
 
         // Piper uses BCP-47 language codes (e.g. "en", "ru", "uk").
         // When language is empty or "auto", detect it from the input text.
-        string language;
-        if (string.IsNullOrWhiteSpace(request.Language) ||
-            request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            var detection = _detector.Value.Detect(request.Text);
-            language = detection.ToFormat(LanguageCodeFormat.Bcp47);
-        }
-        else
-        {
-            language = ConvertLanguageCode(request.Language, langFormat, LanguageCodeFormat.Bcp47);
-        }
+        var language = string.IsNullOrWhiteSpace(request.Language) ||
+                       request.Language.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? _detector.Value.Detect(request.Text).Bcp47
+            : request.Language;
 
         Core.Models.SynthesisResult result;
         try
@@ -234,14 +223,15 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateAudioResponse> TranslateAudio(
         TranslateAudioRequest request, ServerCallContext context)
     {
-        var langFormat = ResolveLanguageFormat(request.LanguageFormat);
+        // The cascade crosses three engines (Whisper → translator → Piper); BCP-47 is the
+        // only format every stage accepts, so "native" here simply means "no conversion".
+        ResolveLanguageFormat(request.LanguageFormat);
 
         // --- Step 1: Speech → Text (Whisper) ---
-        // Whisper expects BCP-47 language codes (e.g. "en", "ru") or "auto".
         var sttLanguage = string.IsNullOrWhiteSpace(request.SourceLanguage) ||
                           request.SourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase)
             ? "auto"
-            : ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Bcp47);
+            : request.SourceLanguage;
 
         Core.Models.TranscriptionResult transcription;
         try
@@ -265,20 +255,18 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             };
 
         // --- Step 2: Text → Text translation ---
-        // Translators expect FLORES-200 codes internally.
-        // Prefer the language Whisper detected; fall back to the explicit request field.
-        // Guard against "auto" slipping through as a literal language code if
-        // Whisper returns an empty DetectedLanguage and the caller specified "auto".
-        var detectedBcp47 = transcription.DetectedLanguage;
-        string sourceFlores;
-        if (!string.IsNullOrEmpty(detectedBcp47))
+        // Prefer the language Whisper detected (BCP-47); fall back to the explicit
+        // request field. Guard against "auto" slipping through as a literal language
+        // code if Whisper returns an empty DetectedLanguage and the caller specified "auto".
+        string sourceLanguage;
+        if (!string.IsNullOrEmpty(transcription.DetectedLanguage))
         {
-            sourceFlores = ConvertLanguageCode(detectedBcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200);
+            sourceLanguage = transcription.DetectedLanguage;
         }
         else if (!string.IsNullOrEmpty(request.SourceLanguage) &&
                  !request.SourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            sourceFlores = ConvertLanguageCode(request.SourceLanguage, langFormat, LanguageCodeFormat.Flores200);
+            sourceLanguage = request.SourceLanguage;
         }
         else
         {
@@ -287,8 +275,6 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
                 "and source_language was not specified. Provide an explicit source_language."));
         }
 
-        var targetFlores = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Flores200);
-
         string translatedText;
         using (var lease = ResolveTranslator(request.Model))
         {
@@ -296,8 +282,8 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
             {
                 translatedText = await lease.Translator.TranslateAsync(
                     transcription.FullText,
-                    sourceFlores,
-                    targetFlores,
+                    sourceLanguage,
+                    request.TargetLanguage,
                     context.CancellationToken);
             }
             catch (ArgumentException ex)
@@ -307,15 +293,12 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         }
 
         // --- Step 3: Text → Speech (Piper) ---
-        // Piper expects BCP-47 language codes.
-        var targetBcp47 = ConvertLanguageCode(request.TargetLanguage, langFormat, LanguageCodeFormat.Bcp47);
-
         Core.Models.SynthesisResult synthesis;
         try
         {
             synthesis = await _synthesizer.SynthesizeAsync(
                 translatedText,
-                targetBcp47,
+                request.TargetLanguage,
                 request.TargetVoice,
                 speed: 1.0f,
                 context.CancellationToken);
@@ -360,36 +343,17 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     }
 
     /// <summary>
-    /// Converts a raw language_format string from the request to <see cref="LanguageCodeFormat"/>.
-    /// Returns <see cref="LanguageCodeFormat.Bcp47"/> when the field is empty.
-    /// Throws <see cref="RpcException"/> with <see cref="StatusCode.InvalidArgument"/> for unknown values
-    /// so the caller gets a well-formed gRPC error instead of an unhandled server exception.
+    /// Validates the raw language_format string from the request.
+    /// The API accepts only <c>"bcp47"</c> (default when empty) and <c>"native"</c>;
+    /// anything else — including formerly supported <c>"flores200"</c> — returns
+    /// <see cref="StatusCode.InvalidArgument"/>.
     /// </summary>
-    private static LanguageCodeFormat ResolveLanguageFormat(string? raw)
-    {
-        try
+    private static LanguageCodeFormat ResolveLanguageFormat(string? raw) =>
+        (raw ?? string.Empty).ToLowerInvariant() switch
         {
-            return (raw ?? string.Empty).ToLanguageCodeFormat();
-        }
-        catch (ArgumentException ex)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
-        }
-    }
-
-    /// <summary>
-    /// Converts a language code between formats, mapping <see cref="ArgumentException"/> to
-    /// <see cref="StatusCode.InvalidArgument"/> so callers receive a well-formed gRPC error.
-    /// </summary>
-    private static string ConvertLanguageCode(string code, LanguageCodeFormat from, LanguageCodeFormat to)
-    {
-        try
-        {
-            return LanguageCodeConverter.Convert(code, from, to);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
-        }
-    }
+            "" or "bcp47" or "bcp-47" => LanguageCodeFormat.Bcp47,
+            "native"                  => LanguageCodeFormat.Native,
+            var other => throw new RpcException(new Status(StatusCode.InvalidArgument,
+                $"Unsupported language_format: '{other}'. Supported values: 'bcp47' (default), 'native'.")),
+        };
 }

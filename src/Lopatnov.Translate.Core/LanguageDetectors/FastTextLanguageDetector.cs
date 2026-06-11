@@ -6,12 +6,17 @@ namespace Lopatnov.Translate.Core.LanguageDetectors;
 
 /// <summary>
 /// Settings for <see cref="FastTextLanguageDetector"/>.
-/// Controls how model labels are stripped and converted to FLORES-200 at load time.
+/// Controls how model labels are stripped; labels are stored in the model's native
+/// format and converted to BCP-47 on demand.
 /// </summary>
 public sealed class FastTextLanguageDetectorSettings
 {
-    /// <summary>Format of the labels in the model file. Default: Flores200 (GlotLID).</summary>
-    public LanguageCodeFormat LabelFormat { get; set; } = LanguageCodeFormat.Flores200;
+    /// <summary>
+    /// Format of the labels in the model file.
+    /// Default: ISO639_3 — GlotLID v3 labels are three-letter ISO 639-3 codes with a
+    /// script suffix (e.g. "ukr_Cyrl"). Use ISO639_1 for LID-176 ("en", "ru", …).
+    /// </summary>
+    public LanguageCodeFormat LabelFormat { get; set; } = LanguageCodeFormat.ISO639_3;
 
     /// <summary>Prefix to strip from each label. Default: "__label__".</summary>
     public string LabelPrefix { get; set; } = "__label__";
@@ -27,8 +32,9 @@ public sealed class FastTextLanguageDetectorSettings
 /// Supported models:
 ///   lid.176.bin/.ftz — fastText LID-176, CC BY-SA 3.0, 176 languages (hierarchical softmax)
 ///                      Use LabelFormat = ISO639_1 ("iso639-1") in settings.
-///   model.bin        — GlotLID v3 (cis-lmu/glotlid-model), Apache 2.0, 1633 languages (OVA)
-///                      Use LabelFormat = Flores200 ("flores200") in settings (default).
+///   model.bin        — GlotLID v3 (cis-lmu/glotlid-model), Apache 2.0, 2102 labels (OVA);
+///                      labels are ISO 639-3 codes with a script suffix (e.g. "ukr_Cyrl").
+///                      Use LabelFormat = ISO639_3 ("iso639-3") in settings (default).
 ///
 /// Binary format reference: fastText v12 (magic = 793712314).
 /// Loss type 1 (hierarchical softmax): Huffman tree is reconstructed for correct prediction.
@@ -99,12 +105,18 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     // suppressed in initNgrams() so only the word embedding contributes to hidden.
     private readonly int _eosRow;
 
+    // --- format of the model's raw labels (after prefix/suffix stripping) ---
+    // Labels are stored untouched so "native" output returns the model's real code;
+    // conversion to BCP-47 happens on demand via LanguageDetectionResult.
+    private readonly LanguageCodeFormat _labelFormat;
+
     // -------------------------------------------------------------------------
 
     private FastTextLanguageDetector(
         ModelParams model, Dictionary<string, int> wordToId,
         MatrixState matrix, float[] output, string[] labels,
-        HsNode[]? hsTree, Dictionary<int, int>? ngramPruneidx)
+        HsNode[]? hsTree, Dictionary<int, int>? ngramPruneidx,
+        LanguageCodeFormat labelFormat)
     {
         _dim = model.Dim; _minn = model.Minn; _maxn = model.Maxn;
         _bucket = model.Bucket; _nwords = model.Nwords;
@@ -117,6 +129,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         _hsTree = hsTree;
         _ngramPruneidx = ngramPruneidx;
         _eosRow = wordToId.TryGetValue("</s>", out int eosId) ? eosId : -1;
+        _labelFormat = labelFormat;
     }
 
     // -------------------------------------------------------------------------
@@ -164,13 +177,13 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         for (int i = 0; i < size; i++)
             if (types[i] == 0) wordToId[words[i]] = i;
 
-        var labelFlores = new List<string>(nlabels);
+        var labelCodes = new List<string>(nlabels);
         var labelCounts = new List<long>(nlabels);
         for (int i = 0; i < size; i++)
         {
             if (types[i] == 1)
             {
-                labelFlores.Add(MapLabel(words[i], settings));
+                labelCodes.Add(MapLabel(words[i], settings));
                 labelCounts.Add(counts[i]);
             }
         }
@@ -190,9 +203,10 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
         return new FastTextLanguageDetector(
             model, wordToId, matrix,
-            output, labelFlores.ToArray(),
+            output, labelCodes.ToArray(),
             hsTree,
-            pruneidxSize > 0 ? ngramPruneidx : null);
+            pruneidxSize > 0 ? ngramPruneidx : null,
+            settings.LabelFormat);
     }
 
     private static (ModelParams model, int loss) ReadModelArgs(BinaryReader br)
@@ -296,7 +310,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
     public LanguageDetectionResult Detect(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200);
+            return new LanguageDetectionResult(Language.English, LanguageCodeFormat.Bcp47);
 
         var h = new float[_dim];
         int count = 0;
@@ -323,14 +337,16 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
         }
 
         if (count == 0)
-            return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200);
+            return new LanguageDetectionResult(Language.English, LanguageCodeFormat.Bcp47);
 
         for (int i = 0; i < _dim; i++)
             h[i] /= count;
 
+        // The raw model label and its declared format — "native" callers get the real
+        // code; BCP-47 normalisation happens on demand via LanguageDetectionResult.
         return new LanguageDetectionResult(
             _hsTree != null ? PredictHs(h) : PredictArgmax(h),
-            LanguageCodeFormat.Flores200);
+            _labelFormat);
     }
 
     // -------------------------------------------------------------------------
@@ -372,7 +388,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
             stack.Push((_hsTree[node].Left, logScore + MathF.Log(1f - f)));
         }
 
-        return bestLabel < osz ? _labels[bestLabel] : Language.EnglishLatin;
+        return bestLabel < osz ? _labels[bestLabel] : Language.English;
     }
 
     // Prediction for softmax/ova/ns: argmax of dot products.
@@ -389,7 +405,7 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
                 score += h[k] * _output[rowBase + k];
             if (score > bestScore) { bestScore = score; best = j; }
         }
-        return best < nlabels ? _labels[best] : Language.EnglishLatin;
+        return best < nlabels ? _labels[best] : Language.English;
     }
 
     // Reconstruct the Huffman tree from label frequencies.
@@ -563,14 +579,16 @@ public sealed class FastTextLanguageDetector : ILanguageDetector
 
     // -------------------------------------------------------------------------
 
+    // Strips the configured prefix/suffix only — the label itself is stored untouched.
+    // No format conversion happens here: the model's native code must survive so that
+    // "native" output returns the real label (e.g. "ukr_Cyrl" from GlotLID, "en" from
+    // LID-176). Conversion to BCP-47 is performed on demand by LanguageDetectionResult.
     private static string MapLabel(string label, FastTextLanguageDetectorSettings s)
     {
         if (label.StartsWith(s.LabelPrefix, StringComparison.Ordinal))
             label = label[s.LabelPrefix.Length..];
         if (!string.IsNullOrEmpty(s.LabelSuffix) && label.EndsWith(s.LabelSuffix, StringComparison.Ordinal))
             label = label[..^s.LabelSuffix.Length];
-        if (s.LabelFormat == LanguageCodeFormat.Flores200)
-            return label;
-        return LanguageCodeConverter.Convert(label, s.LabelFormat, LanguageCodeFormat.Flores200);
+        return label;
     }
 }

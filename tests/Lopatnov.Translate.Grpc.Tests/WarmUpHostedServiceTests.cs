@@ -143,7 +143,7 @@ public sealed class WarmUpHostedServiceTests
         await RunAsync(svc, TestContext.Current.CancellationToken);
 
         mockTranslator.Verify(
-            t => t.TranslateAsync(" ", "eng_Latn", "fra_Latn", It.IsAny<CancellationToken>()),
+            t => t.TranslateAsync(" ", "en", "fr", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

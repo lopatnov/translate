@@ -25,16 +25,20 @@ Proto source: [`src/Lopatnov.Translate.Grpc/Protos/translate.proto`](../src/Lopa
 
 All RPCs that accept or return language codes support a `language_format` field on the request.
 
-| Value         | Description                                          | Example                    |
-| ------------- | ---------------------------------------------------- | -------------------------- |
-| `"bcp47"`     | BCP-47 tags. Default when field is empty or omitted. | `"uk"`, `"zh-Hans"`        |
-| `"flores200"` | FLORES-200 codes used internally by NLLB and M2M-100 | `"ukr_Cyrl"`, `"zho_Hans"` |
-| `"iso639-1"`  | ISO 639-1 two-letter codes                           | `"uk"`, `"de"`             |
-| `"iso639-2"`  | ISO 639-2 three-letter codes (terminological form)   | `"ukr"`, `"deu"`           |
-| `"iso639-3"`  | ISO 639-3 three-letter codes                         | `"ukr"`, `"deu"`           |
-| `"native"`    | No conversion — pass the code through unchanged.     | any string                 |
+| Value      | Description                                                            | Example             |
+| ---------- | ---------------------------------------------------------------------- | ------------------- |
+| `"bcp47"`  | BCP-47 tags — the system interchange format. Default when empty.       | `"uk"`, `"zh-Hans"` |
+| `"native"` | Model-specific codes, passed through unchanged. Detection results return the detector's raw label (e.g. `"ukr_Cyrl"` from GlotLID, `"en"` from LID-176). | any string |
 
-Unknown or unrecognised codes are returned unchanged regardless of format.
+Any other value (including the formerly supported `"flores200"`) is rejected with
+`INVALID_ARGUMENT`.
+
+**How codes flow.** BCP-47 is the only intermediate format: detector output is normalised
+to BCP-47 before reaching a translation model, and each model adapter converts BCP-47 to
+its own native codes internally (NLLB → FLORES-200, M2M-100 / LibreTranslate → ISO 639-1).
+Codes an adapter does not recognise as BCP-47 pass through unchanged, so with `"native"`
+you can address any model in its own vocabulary directly. Region-qualified tags collapse
+to the primary subtag automatically (`"en-US"` → `"en"`).
 
 ---
 
@@ -65,7 +69,7 @@ message TranslateTextRequest {
   string target_language = 3;  // language code (see language_format)
   string model           = 4;  // model key from appsettings.json (e.g. "m2m100_418M"); "" = default
   string context         = 5;  // optional: free-form hint (reserved for LLM-based models)
-  string language_format = 6;  // "bcp47" (default) | "flores200" | "native"
+  string language_format = 6;  // "bcp47" (default) | "native"
 }
 ```
 
@@ -90,12 +94,12 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
-With FLORES-200 codes:
+With model-native codes (FLORES-200 for NLLB):
 
 ```bash
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
-  -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn", "language_format": "flores200"}' \
+  -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn", "language_format": "native"}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
@@ -176,7 +180,7 @@ If not configured, falls back to heuristic detection (Unicode block analysis).
 ```protobuf
 message DetectLanguageRequest {
   string text            = 1;
-  string language_format = 2;  // "bcp47" (default) | "flores200" | "native"
+  string language_format = 2;  // "bcp47" (default) | "native"
 }
 ```
 
@@ -199,10 +203,10 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/DetectLanguage
 # → {"language": "uk"}
 
-# FLORES-200
+# native — the detector's raw label (e.g. GlotLID emits ISO 639-3 + script)
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
-  -d '{"text": "Привіт, як справи?", "language_format": "flores200"}' \
+  -d '{"text": "Привіт, як справи?", "language_format": "native"}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/DetectLanguage
 # → {"language": "ukr_Cyrl"}
 ```
@@ -223,7 +227,7 @@ message TranscribeAudioRequest {
   bytes  audio_data      = 1;  // WAV file bytes, max 50 MB (any sample rate / channels — resampled automatically to 16 kHz mono)
   string language        = 2;  // BCP-47 language hint (e.g. "en", "ru"); "" or "auto" = Whisper auto-detection
   string audio_format    = 3;  // reserved; pass "" or "wav"
-  string language_format = 4;  // format for detected_language in response: "bcp47" (default) | "flores200"
+  string language_format = 4;  // format for detected_language in response: "bcp47" (default) | "native"
 }
 ```
 
@@ -270,7 +274,7 @@ With explicit language and FLORES-200 response:
 ```bash
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
-  -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"uk\", \"language_format\": \"flores200\"}" \
+  -d "{\"audio_data\": \"$(base64 -w0 recording.wav)\", \"language\": \"uk\"}" \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranscribeAudio
 # → {"segments":[{"text":"Привіт","startTime":0.0,"endTime":1.2}], "detectedLanguage":"ukr_Cyrl", "fullText":"Привіт"}
 ```
@@ -294,7 +298,7 @@ message SynthesizeSpeechRequest {
   string language        = 2;  // BCP-47 language code (e.g. "en", "uk"); matched against TextToAudio map
   string voice           = 3;  // optional: speaker name for multi-speaker models (e.g. "mykyta", "lada", "tetiana")
   float  speed           = 4;  // speech rate multiplier; 1.0 = normal, 0.5 = half speed, 2.0 = double speed
-  string language_format = 5;  // format for the language field: "bcp47" (default) | "flores200" | "native"
+  string language_format = 5;  // format for the language field: "bcp47" (default) | "native" | "native"
 }
 ```
 
@@ -359,7 +363,7 @@ message TranslateAudioRequest {
   string target_language  = 3;  // BCP-47 target language; selects the TTS voice via TextToAudio map
   string audio_format     = 4;  // reserved; pass "" or "wav"
   string target_voice     = 5;  // optional: speaker name for multi-speaker target voice
-  string language_format  = 6;  // format for source_language/target_language: "bcp47" (default) | "flores200" | "native"
+  string language_format  = 6;  // format for source_language/target_language: "bcp47" (default) | "native" | "native"
 }
 ```
 

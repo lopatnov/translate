@@ -60,7 +60,8 @@ internal static class ModelBootstrap
         {
             return FastTextLanguageDetector.Load(modelPath, new FastTextLanguageDetectorSettings
             {
-                LabelFormat = cfg.LabelFormat?.ToLanguageCodeFormat() ?? LanguageCodeFormat.Flores200,
+                // GlotLID v3 labels are ISO 639-3 codes with a script suffix (e.g. "ukr_Cyrl").
+                LabelFormat = cfg.LabelFormat?.ToLanguageCodeFormat() ?? LanguageCodeFormat.ISO639_3,
                 LabelPrefix = cfg.LabelPrefix ?? "__label__",
                 LabelSuffix = cfg.LabelSuffix ?? string.Empty,
             });
