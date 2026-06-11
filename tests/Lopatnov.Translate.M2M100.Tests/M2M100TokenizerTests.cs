@@ -61,6 +61,18 @@ public sealed class M2M100TokenizerTests
 
         Assert.Equal(native, regional);
     }
+
+    [Fact]
+    public void GetLanguageTokenId_RegionalAliasResolvesViaProgressiveStripping()
+    {
+        var tokenizer = new FakeM2M100Tokenizer();
+
+        // "nb-NO" is not in the alias map directly: it must strip to "nb",
+        // hit the nb → no alias, and land on the model's "no" token.
+        var bokmal = tokenizer.GetLanguageTokenId("nb-NO");
+
+        Assert.Equal(FakeM2M100Tokenizer.NoLangId, bokmal);
+    }
 }
 
 /// <summary>
@@ -71,12 +83,21 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
     public const long EnLangId = 128022L;
     public const long UkLangId = 128094L;
     public const long RuLangId = 128077L;
+    public const long NoLangId = 128058L;
 
     private static readonly Dictionary<string, long> IsoIds = new(StringComparer.OrdinalIgnoreCase)
     {
         ["en"] = EnLangId,
         ["uk"] = UkLangId,
         ["ru"] = RuLangId,
+        ["no"] = NoLangId,
+    };
+
+    // Mirrors M2M100Tokenizer.Bcp47ToM2MCode for the languages used in tests.
+    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["nb"] = "no",
+        ["nn"] = "no",
     };
 
     public long[] Encode(string text, string sourceLanguage)
@@ -96,14 +117,21 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
         return new string(chars.ToArray());
     }
 
-    // Mirrors M2M100Tokenizer.GetLanguageTokenId: exact match, then primary subtag.
+    // Mirrors M2M100Tokenizer.GetLanguageTokenId: strip subtags from the right,
+    // consulting the alias map at every step.
     public long GetLanguageTokenId(string languageCode)
     {
-        if (IsoIds.TryGetValue(languageCode, out var id))
-            return id;
-        var dash = languageCode.IndexOf('-');
-        if (dash > 0 && IsoIds.TryGetValue(languageCode[..dash], out id))
-            return id;
+        var tag = languageCode;
+        while (true)
+        {
+            var code = Aliases.TryGetValue(tag, out var alias) ? alias : tag;
+            if (IsoIds.TryGetValue(code, out var id))
+                return id;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                break;
+            tag = tag[..dash];
+        }
         throw new ArgumentException($"Unknown language code: '{languageCode}'", nameof(languageCode));
     }
 

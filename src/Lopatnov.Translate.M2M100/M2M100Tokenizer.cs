@@ -82,16 +82,21 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
 
     public long GetLanguageTokenId(string languageCode)
     {
-        // Accept BCP-47 (the system interchange format): exact match first, then known
-        // aliases (zh-Hans → zh), then the primary subtag (en-US → en). The model's
-        // native ISO 639-1-style codes match directly on the first attempt.
-        var code = Bcp47ToM2MCode.TryGetValue(languageCode, out var alias) ? alias : languageCode;
-        if (_isoToTokenId.TryGetValue(code, out var id))
-            return id;
-
-        var dash = code.IndexOf('-');
-        if (dash > 0 && _isoToTokenId.TryGetValue(code[..dash], out id))
-            return id;
+        // Accept BCP-47 (the system interchange format). Subtags are stripped from the
+        // right so the most specific known form wins, and the alias map is consulted at
+        // every step — e.g. "nb-NO" → "nb" → alias "no" → token. The model's native
+        // ISO 639-1-style codes match directly on the first attempt.
+        var tag = languageCode;
+        while (true)
+        {
+            var code = Bcp47ToM2MCode.TryGetValue(tag, out var alias) ? alias : tag;
+            if (_isoToTokenId.TryGetValue(code, out var id))
+                return id;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                break;
+            tag = tag[..dash];
+        }
 
         throw new ArgumentException(
             $"Unknown language code: '{languageCode}'. " +

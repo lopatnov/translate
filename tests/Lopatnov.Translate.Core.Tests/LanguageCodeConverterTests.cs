@@ -110,15 +110,24 @@ public sealed class LanguageCodeConverterTests
         Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Cyrl", format, "bcp47"));
     }
 
-    // ── BCP-47 primary-subtag fallback (en-US → en → eng_Latn) ────────────────
+    // ── BCP-47 subtag fallback: strip from the right, most specific tag wins ──
 
     [Theory]
-    [InlineData("en-US", "eng_Latn")]
-    [InlineData("de-DE", "deu_Latn")]
-    [InlineData("uk-UA", "ukr_Cyrl")]
-    public void Convert_Bcp47WithRegionSubtag_ResolvesViaPrimarySubtag(string bcp47, string expectedFlores)
+    [InlineData("en-US",      "eng_Latn")]
+    [InlineData("de-DE",      "deu_Latn")]
+    [InlineData("uk-UA",      "ukr_Cyrl")]
+    [InlineData("zh-Hant-HK", "zho_Hant")] // script must survive: zh-Hant-HK → zh-Hant, NOT zh
+    [InlineData("zh-Hans-SG", "zho_Hans")]
+    public void Convert_Bcp47WithExtraSubtags_ResolvesToMostSpecificMatch(string bcp47, string expectedFlores)
     {
         Assert.Equal(expectedFlores, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200));
+    }
+
+    [Fact]
+    public void Convert_ZhoHant_RoundTripsBetweenFloresAndBcp47()
+    {
+        Assert.Equal("zh-Hant", LanguageCodeConverter.Convert("zho_Hant", LanguageCodeFormat.Flores200, LanguageCodeFormat.Bcp47));
+        Assert.Equal("zho_Hant", LanguageCodeConverter.Convert("zh-Hant", LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200));
     }
 
     // ── ISO 639-3 (incl. GlotLID script-suffixed labels) → BCP-47 ─────────────
@@ -130,6 +139,7 @@ public sealed class LanguageCodeConverterTests
     [InlineData("zho",      "zh-Hans")]
     [InlineData("ukr_Cyrl", "uk")]      // GlotLID v3 label: ISO 639-3 + script
     [InlineData("eng_Latn", "en")]      // GlotLID v3 label: ISO 639-3 + script
+    [InlineData("zho_Hant", "zh-Hant")] // Traditional Chinese script label
     [InlineData("ceb",      "ceb")]     // no 2-letter code — passes through as valid BCP-47
     public void Convert_Iso639_3ToBcp47_ReturnsCorrectCode(string iso, string expectedBcp47)
     {
@@ -139,11 +149,12 @@ public sealed class LanguageCodeConverterTests
     // ── BCP-47 → ISO 639-1 (model adapters: M2M-100, LibreTranslate) ──────────
 
     [Theory]
-    [InlineData("en",      "en")]
-    [InlineData("zh-Hans", "zh")]
-    [InlineData("zh-Hant", "zh")]
-    [InlineData("yue",     "zh")]
-    [InlineData("en-US",   "en")]
+    [InlineData("en",          "en")]
+    [InlineData("zh-Hans",     "zh")]
+    [InlineData("zh-Hant",     "zh")]
+    [InlineData("yue",         "zh")]
+    [InlineData("yue-Hant-HK", "zh")] // override must win over the primary subtag "yue"
+    [InlineData("en-US",       "en")]
     public void Convert_Bcp47ToIso639_1_ReturnsCorrectCode(string bcp47, string expectedIso)
     {
         Assert.Equal(expectedIso, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.ISO639_1));

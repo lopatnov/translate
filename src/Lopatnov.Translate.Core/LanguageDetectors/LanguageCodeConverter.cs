@@ -72,26 +72,41 @@ public static class LanguageCodeConverter
         _                            => original,
     };
 
-    // Exact match first; then retry with the primary subtag so region/script-qualified
-    // tags resolve too (e.g. "en-US" → "en" → "eng_Latn"). Unknown codes pass through.
+    // Exact match first; then progressively strip subtags from the right so the most
+    // specific known tag wins: "zh-Hant-HK" → "zh-Hant" (Traditional) → "zh", and
+    // "en-US" → "en" → "eng_Latn". Stripping the leftmost subtag instead would turn
+    // "zh-Hant-HK" into "zh" and silently lose the script. Unknown codes pass through.
     private static string LookupWithPrimarySubtag(IReadOnlyDictionary<string, string> map, string bcp47)
     {
-        if (map.TryGetValue(bcp47, out var mapped))
-            return mapped;
-        var dash = bcp47.IndexOf('-');
-        if (dash > 0 && map.TryGetValue(bcp47[..dash], out mapped))
-            return mapped;
-        return bcp47;
+        var tag = bcp47;
+        while (true)
+        {
+            if (map.TryGetValue(tag, out var mapped))
+                return mapped;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                return bcp47;
+            tag = tag[..dash];
+        }
     }
 
     private static string ToIso639_1(string bcp47)
     {
-        // Tags whose primary subtag is not the ISO 639-1 macro-language code.
-        if (_bcp47ToIso639_1Overrides.TryGetValue(bcp47, out var iso))
-            return iso;
+        // Tags whose ISO 639-1 form is not simply the primary subtag (zh-Hant, yue, …).
+        // Strip subtags from the right so "yue-Hant-HK" still hits the "yue" override.
+        var tag = bcp47;
+        while (true)
+        {
+            if (_bcp47ToIso639_1Overrides.TryGetValue(tag, out var iso))
+                return iso;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                break;
+            tag = tag[..dash];
+        }
         // "en-US" → "en"; bare 2-letter tags are already ISO 639-1.
-        var dash = bcp47.IndexOf('-');
-        return dash > 0 ? bcp47[..dash] : bcp47;
+        var first = bcp47.IndexOf('-');
+        return first > 0 ? bcp47[..first] : bcp47;
     }
 
     // Lenient parsing for string-based API: handles hyphen variants, empty → BCP-47, unknown → Native.
@@ -166,6 +181,7 @@ public static class LanguageCodeConverter
             ["npi_Deva"] = "ne",
             ["sin_Sinh"] = "si",
             ["zho_Hans"] = "zh-Hans",
+            ["zho_Hant"] = "zh-Hant",
             ["cmn_Hani"] = "zh-Hans",
             ["yue_Hant"] = "yue",
             ["jpn_Jpan"] = "ja",
@@ -210,11 +226,10 @@ public static class LanguageCodeConverter
             map.TryAdd(bcp47, flores); // first entry wins for duplicate BCP-47 values
 
         // BCP-47 aliases and macro-tags not covered by the simple inverse
-        map["zh"]      = "zho_Hans"; // plain "zh" → Simplified Chinese
-        map["zh-CN"]   = "zho_Hans";
-        map["zh-Hant"] = "zho_Hant"; // Traditional Chinese (NLLB token, not in forward map)
-        map["zh-TW"]   = "zho_Hant";
-        map["no"]      = "nob_Latn"; // Norwegian macro-tag → Bokmål
+        map["zh"]    = "zho_Hans"; // plain "zh" → Simplified Chinese
+        map["zh-CN"] = "zho_Hans";
+        map["zh-TW"] = "zho_Hant";
+        map["no"]    = "nob_Latn"; // Norwegian macro-tag → Bokmål
         return map;
     }
 

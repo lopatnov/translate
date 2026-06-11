@@ -298,7 +298,7 @@ message SynthesizeSpeechRequest {
   string language        = 2;  // BCP-47 language code (e.g. "en", "uk"); matched against TextToAudio map
   string voice           = 3;  // optional: speaker name for multi-speaker models (e.g. "mykyta", "lada", "tetiana")
   float  speed           = 4;  // speech rate multiplier; 1.0 = normal, 0.5 = half speed, 2.0 = double speed
-  string language_format = 5;  // format for the language field: "bcp47" (default) | "native" | "native"
+  string language_format = 5;  // format for the language field: "bcp47" (default) | "native"
 }
 ```
 
@@ -363,7 +363,7 @@ message TranslateAudioRequest {
   string target_language  = 3;  // BCP-47 target language; selects the TTS voice via TextToAudio map
   string audio_format     = 4;  // reserved; pass "" or "wav"
   string target_voice     = 5;  // optional: speaker name for multi-speaker target voice
-  string language_format  = 6;  // format for source_language/target_language: "bcp47" (default) | "native" | "native"
+  string language_format  = 6;  // format for source_language/target_language: "bcp47" (default) | "native"
 }
 ```
 
