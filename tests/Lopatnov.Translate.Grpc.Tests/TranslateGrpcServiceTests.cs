@@ -776,6 +776,30 @@ public sealed class TranslateGrpcServiceTests
     }
 
     [Fact]
+    public async Task TranslateLocalization_ThrowsInvalidArgument_WhenTranslatorRejectsLanguage()
+    {
+        var mockTranslator = new Mock<ITextTranslator>();
+        mockTranslator
+            .Setup(t => t.TranslateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ArgumentException("Unknown language code: 'xx'"));
+
+        var svc = new TranslateGrpcService(
+            SingleProviderManager("nllb", mockTranslator.Object),
+            NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateLocalization(new TranslateLocalizationRequest
+            {
+                Json           = """{"greeting": "Hello"}""",
+                SourceLanguage = "en",
+                TargetLanguage = "xx",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
+    }
+
+    [Fact]
     public async Task TranslateLocalization_ThrowsInvalidArgument_ForMalformedJson()
     {
         var mockTranslator = new Mock<ITextTranslator>();

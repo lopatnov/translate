@@ -80,17 +80,24 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
             .Trim();
     }
 
-    public long GetLanguageTokenId(string languageCode)
+    public long GetLanguageTokenId(string languageCode) =>
+        ResolveLanguageTokenId(languageCode, _isoToTokenId);
+
+    /// <summary>
+    /// Resolves a BCP-47 tag (the system interchange format) to an M2M-100 language
+    /// token ID. Subtags are stripped from the right so the most specific known form
+    /// wins, and the alias map is consulted at every step — e.g. "nb-NO" → "nb" →
+    /// alias "no" → token. The model's native ISO 639-1-style codes match directly
+    /// on the first attempt.
+    /// </summary>
+    internal static long ResolveLanguageTokenId(
+        string languageCode, IReadOnlyDictionary<string, long> tokenIds)
     {
-        // Accept BCP-47 (the system interchange format). Subtags are stripped from the
-        // right so the most specific known form wins, and the alias map is consulted at
-        // every step — e.g. "nb-NO" → "nb" → alias "no" → token. The model's native
-        // ISO 639-1-style codes match directly on the first attempt.
         var tag = languageCode;
         while (true)
         {
             var code = Bcp47ToM2MCode.TryGetValue(tag, out var alias) ? alias : tag;
-            if (_isoToTokenId.TryGetValue(code, out var id))
+            if (tokenIds.TryGetValue(code, out var id))
                 return id;
             var dash = tag.LastIndexOf('-');
             if (dash <= 0)

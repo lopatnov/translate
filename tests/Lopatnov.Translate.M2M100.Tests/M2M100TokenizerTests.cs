@@ -76,6 +76,44 @@ public sealed class M2M100TokenizerTests
 }
 
 /// <summary>
+/// Direct tests of the production resolver — the exact logic the real tokenizer
+/// uses, exercised without model files via an injected token table.
+/// </summary>
+public sealed class M2M100LanguageTokenResolutionTests
+{
+    private static readonly Dictionary<string, long> Tokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["en"] = 1L,
+        ["uk"] = 2L,
+        ["no"] = 3L,
+        ["zh"] = 4L,
+    };
+
+    [Theory]
+    [InlineData("en",         1L)] // native ISO 639-1 == BCP-47
+    [InlineData("en-US",      1L)] // region subtag stripped
+    [InlineData("uk-UA",      2L)]
+    [InlineData("nb",         3L)] // alias nb → no
+    [InlineData("nn",         3L)] // alias nn → no
+    [InlineData("nb-NO",      3L)] // strip to nb, then alias → no
+    [InlineData("zh-Hans",    4L)] // alias zh-Hans → zh
+    [InlineData("zh-Hant",    4L)]
+    [InlineData("zh-Hans-SG", 4L)] // strip to zh-Hans, then alias → zh
+    public void ResolveLanguageTokenId_ResolvesBcp47Variants(string code, long expected)
+    {
+        Assert.Equal(expected, M2M100Tokenizer.ResolveLanguageTokenId(code, Tokens));
+    }
+
+    [Theory]
+    [InlineData("xyz_Unknown")]
+    [InlineData("eng_Latn")] // FLORES-200 is no longer accepted by the M2M-100 adapter
+    public void ResolveLanguageTokenId_ThrowsForUnknownCode(string code)
+    {
+        Assert.Throws<ArgumentException>(() => M2M100Tokenizer.ResolveLanguageTokenId(code, Tokens));
+    }
+}
+
+/// <summary>
 /// Deterministic in-memory tokenizer for unit tests — no model files needed.
 /// </summary>
 internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
@@ -84,6 +122,7 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
     public const long UkLangId = 128094L;
     public const long RuLangId = 128077L;
     public const long NoLangId = 128058L;
+    public const long ZhLangId = 128103L;
 
     private static readonly Dictionary<string, long> IsoIds = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -91,13 +130,7 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
         ["uk"] = UkLangId,
         ["ru"] = RuLangId,
         ["no"] = NoLangId,
-    };
-
-    // Mirrors M2M100Tokenizer.Bcp47ToM2MCode for the languages used in tests.
-    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["nb"] = "no",
-        ["nn"] = "no",
+        ["zh"] = ZhLangId,
     };
 
     public long[] Encode(string text, string sourceLanguage)
@@ -117,23 +150,10 @@ internal sealed class FakeM2M100Tokenizer : IM2M100Tokenizer
         return new string(chars.ToArray());
     }
 
-    // Mirrors M2M100Tokenizer.GetLanguageTokenId: strip subtags from the right,
-    // consulting the alias map at every step.
-    public long GetLanguageTokenId(string languageCode)
-    {
-        var tag = languageCode;
-        while (true)
-        {
-            var code = Aliases.TryGetValue(tag, out var alias) ? alias : tag;
-            if (IsoIds.TryGetValue(code, out var id))
-                return id;
-            var dash = tag.LastIndexOf('-');
-            if (dash <= 0)
-                break;
-            tag = tag[..dash];
-        }
-        throw new ArgumentException($"Unknown language code: '{languageCode}'", nameof(languageCode));
-    }
+    // Delegates to the PRODUCTION resolver so the fake can never diverge from the
+    // real adapter's language-code behaviour (only the token table is faked).
+    public long GetLanguageTokenId(string languageCode) =>
+        M2M100Tokenizer.ResolveLanguageTokenId(languageCode, IsoIds);
 
     public void Dispose() { }
 }

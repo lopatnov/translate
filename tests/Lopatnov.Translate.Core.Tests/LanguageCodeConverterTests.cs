@@ -146,6 +146,49 @@ public sealed class LanguageCodeConverterTests
         Assert.Equal(expectedBcp47, LanguageCodeConverter.Convert(iso, LanguageCodeFormat.ISO639_3, LanguageCodeFormat.Bcp47));
     }
 
+    // ── ISO 639-2/B bibliographic codes → BCP-47 ──────────────────────────────
+
+    [Theory]
+    [InlineData("ger", "de")]
+    [InlineData("fre", "fr")]
+    [InlineData("dut", "nl")]
+    [InlineData("cze", "cs")]
+    [InlineData("rum", "ro")]
+    [InlineData("gre", "el")]
+    [InlineData("alb", "sq")]
+    [InlineData("arm", "hy")]
+    [InlineData("geo", "ka")]
+    [InlineData("per", "fa")]
+    [InlineData("chi", "zh-Hans")]
+    public void Convert_Iso639_2BibliographicToBcp47_ReturnsCorrectCode(string isoB, string expectedBcp47)
+    {
+        Assert.Equal(expectedBcp47, LanguageCodeConverter.Convert(isoB, LanguageCodeFormat.ISO639_2, LanguageCodeFormat.Bcp47));
+    }
+
+    [Fact]
+    public void Convert_Iso639_3ScriptSuffixNotInFloresTable_ResolvesViaBarePrefix()
+    {
+        // "ukr_Latn" is not a FLORES-200 entry — the bare ISO 639-3 prefix resolves it.
+        Assert.Equal("uk", LanguageCodeConverter.Convert("ukr_Latn", LanguageCodeFormat.ISO639_3, LanguageCodeFormat.Bcp47));
+    }
+
+    // ── BCP-47 → ISO 639-3 (macro-language pins) ──────────────────────────────
+
+    [Theory]
+    [InlineData("en",      "eng")]
+    [InlineData("uk",      "ukr")]
+    [InlineData("en-US",   "eng")] // region subtag collapses
+    [InlineData("lv",      "lvs")] // Standard Latvian, not the macro code "lav"
+    [InlineData("ne",      "npi")]
+    [InlineData("zh-Hans", "zho")]
+    [InlineData("ms",      "zsm")]
+    [InlineData("sw",      "swh")]
+    [InlineData("mn",      "khk")]
+    public void Convert_Bcp47ToIso639_3_ReturnsPinnedIndividualCode(string bcp47, string expectedIso3)
+    {
+        Assert.Equal(expectedIso3, LanguageCodeConverter.Convert(bcp47, LanguageCodeFormat.Bcp47, LanguageCodeFormat.ISO639_3));
+    }
+
     // ── BCP-47 → ISO 639-1 (model adapters: M2M-100, LibreTranslate) ──────────
 
     [Theory]

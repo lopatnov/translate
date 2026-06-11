@@ -46,13 +46,16 @@ public static class LanguageCodeConverter
     };
 
     // ISO 639-1 two-letter codes are valid BCP-47 primary subtags already and fall
-    // through to passthrough. Three-letter codes resolve via the ISO 639-3 table.
+    // through to passthrough. Three-letter codes resolve via the ISO 639-3 table,
+    // with ISO 639-2/B bibliographic spellings ("ger", "fre", …) as a fallback.
     // GlotLID v3 labels are ISO 639-3 codes with a script suffix (e.g. "ukr_Cyrl",
     // 2102 labels) — the FLORES-200 table shares that shape and covers the common
     // ones; otherwise the bare ISO 639-3 prefix is tried. Unknown codes pass through.
     private static string Iso639ToBcp47(string code)
     {
         if (_iso639_3ToBcp47.TryGetValue(code, out var bcp47))
+            return bcp47;
+        if (_iso639_2BToBcp47.TryGetValue(code, out bcp47))
             return bcp47;
         if (_flores200ToBcp47.TryGetValue(code, out bcp47))
             return bcp47;
@@ -326,6 +329,32 @@ public static class LanguageCodeConverter
             ["mlg"] = "mg",
             ["epo"] = "eo",
             ["ell"] = "el",
+        };
+
+    // ISO 639-2/B bibliographic spellings that differ from the 639-2/T / 639-3 codes.
+    // Kept in a separate input-only table so they never participate in the
+    // BCP-47 → ISO 639-3 inverse derivation below.
+    private static readonly Dictionary<string, string> _iso639_2BToBcp47 =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ger"] = "de",
+            ["fre"] = "fr",
+            ["dut"] = "nl",
+            ["cze"] = "cs",
+            ["slo"] = "sk",
+            ["rum"] = "ro",
+            ["gre"] = "el",
+            ["alb"] = "sq",
+            ["arm"] = "hy",
+            ["geo"] = "ka",
+            ["per"] = "fa",
+            ["chi"] = "zh-Hans",
+            ["ice"] = "is",
+            ["mac"] = "mk",
+            ["may"] = "ms",
+            ["bur"] = "my",
+            ["wel"] = "cy",
+            ["baq"] = "eu",
         };
 
     // BCP-47 → ISO 639-3: invert _iso639_3ToBcp47. Where several ISO codes share one

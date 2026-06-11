@@ -50,13 +50,20 @@ public sealed class NllbTokenizer : INllbTokenizer
         return _tokenizer.Decode(filtered) ?? string.Empty;
     }
 
-    public long GetLanguageTokenId(string languageCode)
+    public long GetLanguageTokenId(string languageCode) =>
+        ResolveLanguageTokenId(languageCode, _langTokenIds);
+
+    /// <summary>
+    /// Resolves a BCP-47 tag (the system interchange format) to an NLLB language token ID.
+    /// NLLB's native vocabulary is FLORES-200, so the code is converted first; native
+    /// FLORES-200 codes pass through the converter unchanged.
+    /// </summary>
+    internal static long ResolveLanguageTokenId(
+        string languageCode, IReadOnlyDictionary<string, long> langTokenIds)
     {
-        // NLLB's native vocabulary is FLORES-200. Accept BCP-47 (the system interchange
-        // format) by converting it here; native FLORES-200 codes pass through unchanged.
         var floresCode = LanguageCodeConverter.Convert(
             languageCode, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200);
-        if (_langTokenIds.TryGetValue(floresCode, out var id))
+        if (langTokenIds.TryGetValue(floresCode, out var id))
             return id;
         throw new ArgumentException(
             $"Unknown language code: '{languageCode}'. " +

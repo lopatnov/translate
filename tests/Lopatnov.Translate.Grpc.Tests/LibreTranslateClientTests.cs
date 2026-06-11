@@ -25,6 +25,7 @@ public sealed class LibreTranslateClientTests
     [InlineData("en")]
     [InlineData("de")]
     [InlineData("auto")] // LibreTranslate accepts "auto" natively — must pass through
+    [InlineData("zz")]   // genuinely unknown code — pass-through contract
     public void ToIso_PlainOrUnknownCode_PassesThrough(string code)
     {
         Assert.Equal(code, LibreTranslateClient.ToIso(code));
