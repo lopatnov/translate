@@ -1,27 +1,32 @@
 namespace Lopatnov.Translate.Core;
 
+/// <summary>
+/// BCP-47 language tags for the languages the built-in heuristic detector can identify.
+/// BCP-47 is the system-wide interchange format: detectors emit it, the gRPC API accepts it,
+/// and each model adapter converts it to the model's native codes internally.
+/// </summary>
 public static class Language
 {
-    public const string EnglishLatin = "eng_Latn";
-    public const string UkrainianCyrillic = "ukr_Cyrl";
-    public const string RussianCyrillic = "rus_Cyrl";
-    public const string GermanLatin = "deu_Latn";
-    public const string FrenchLatin = "fra_Latn";
-    public const string SpanishLatin = "spa_Latn";
-    public const string PortugueseLatin = "por_Latn";
-    public const string ItalianLatin = "ita_Latn";
-    public const string PolishLatin = "pol_Latn";
-    public const string RomanianLatin = "ron_Latn";
-    public const string SwedishLatin = "swe_Latn";
-    public const string CzechLatin = "ces_Latn";
-    public const string TurkishLatin = "tur_Latn";
-    public const string HungarianLatin = "hun_Latn";
-    public const string ChineseSimplified = "zho_Hans";
-    public const string JapaneseJpan = "jpn_Jpan";
-    public const string KoreanHangul = "kor_Hang";
-    public const string ArabicArab = "arb_Arab";
-    public const string HindiDevanagari = "hin_Deva";
-    public const string ThaiThai = "tha_Thai";
-    public const string GreekGrek = "ell_Grek";
-    public const string HebrewHebr = "heb_Hebr";
+    public const string English = "en";
+    public const string Ukrainian = "uk";
+    public const string Russian = "ru";
+    public const string German = "de";
+    public const string French = "fr";
+    public const string Spanish = "es";
+    public const string Portuguese = "pt";
+    public const string Italian = "it";
+    public const string Polish = "pl";
+    public const string Romanian = "ro";
+    public const string Swedish = "sv";
+    public const string Czech = "cs";
+    public const string Turkish = "tr";
+    public const string Hungarian = "hu";
+    public const string ChineseSimplified = "zh-Hans";
+    public const string Japanese = "ja";
+    public const string Korean = "ko";
+    public const string Arabic = "ar";
+    public const string Hindi = "hi";
+    public const string Thai = "th";
+    public const string Greek = "el";
+    public const string Hebrew = "he";
 }

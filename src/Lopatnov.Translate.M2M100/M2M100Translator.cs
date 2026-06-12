@@ -92,6 +92,10 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
     private string Translate(string text, string sourceLanguage, string targetLanguage,
         CancellationToken cancellationToken)
     {
+        // Resolve the target language token BEFORE running the encoder so an invalid
+        // target fails fast instead of after a wasted encoder inference.
+        var targetLangId = _tokenizer.GetLanguageTokenId(targetLanguage);
+
         var inputIds = _tokenizer.Encode(text, sourceLanguage);
         var attentionMask = new long[inputIds.Length];
         Array.Fill(attentionMask, 1L);
@@ -109,8 +113,6 @@ public sealed class M2M100Translator : ITextTranslator, IDisposable
                 var t = outputs.First(o => o.Name == "last_hidden_state").AsTensor<float>();
                 encoderHiddenState = new DenseTensor<float>(t.ToArray(), t.Dimensions.ToArray());
             });
-
-        var targetLangId = _tokenizer.GetLanguageTokenId(targetLanguage);
 
         // Rent a decoder buffer from the pool to avoid per-request heap allocation.
         // Layout: [EOS, tgt_lang_id, ...generated tokens...]

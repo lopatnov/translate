@@ -47,7 +47,7 @@ public sealed class M2M100TranslatorTests
         using var translator = new M2M100Translator(options, new FakeM2M100Tokenizer(),
             encoderMock.Object, decoderMock.Object);
 
-        await translator.TranslateAsync("hello", "eng_Latn", "ukr_Cyrl", TestContext.Current.CancellationToken);
+        await translator.TranslateAsync("hello", "en", "uk", TestContext.Current.CancellationToken);
 
         encoderMock.Verify(s => s.Run(
             It.Is<IReadOnlyCollection<NamedOnnxValue>>(
@@ -98,7 +98,7 @@ public sealed class M2M100TranslatorTests
         using var translator = new M2M100Translator(options, new FakeM2M100Tokenizer(),
             encoderMock.Object, decoderMock.Object);
 
-        await translator.TranslateAsync("hi", "eng_Latn", "ukr_Cyrl", TestContext.Current.CancellationToken);
+        await translator.TranslateAsync("hi", "en", "uk", TestContext.Current.CancellationToken);
 
         Assert.Equal(2, decoderCallCount);
     }
@@ -114,7 +114,7 @@ public sealed class M2M100TranslatorTests
             new Mock<IOnnxSession>().Object, new Mock<IOnnxSession>().Object);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            translator.TranslateAsync("hello", "eng_Latn", "ukr_Cyrl", cts.Token));
+            translator.TranslateAsync("hello", "en", "uk", cts.Token));
     }
 
     [Fact]

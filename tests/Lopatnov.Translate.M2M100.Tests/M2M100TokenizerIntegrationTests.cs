@@ -23,12 +23,11 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("eng_Latn", 128022L)]
-    [InlineData("en",       128022L)]
-    [InlineData("ukr_Cyrl", 128094L)]
-    [InlineData("uk",       128094L)]
-    [InlineData("rus_Cyrl", 128077L)]
-    [InlineData("ru",       128077L)]
+    [InlineData("en",    128022L)]
+    [InlineData("en-US", 128022L)] // BCP-47 region subtag collapses to the primary subtag
+    [InlineData("uk",    128094L)]
+    [InlineData("uk-UA", 128094L)]
+    [InlineData("ru",    128077L)]
     public void GetLanguageTokenId_MatchesAddedTokensJson(string code, long expectedId)
     {
         var addedTokensPath = Path.Combine(ModelPath, "added_tokens.json");
@@ -47,7 +46,7 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
-        var ids = tokenizer.Encode("Hello world", "eng_Latn");
+        var ids = tokenizer.Encode("Hello world", "en");
 
         Assert.True(ids.Length >= 3, $"Expected at least 3 tokens, got {ids.Length}");
 
@@ -66,7 +65,7 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
-        var ids = tokenizer.Encode("Hello, how are you?", "eng_Latn");
+        var ids = tokenizer.Encode("Hello, how are you?", "en");
         var contentIds = ids[1..^1]; // skip lang token and EOS
 
         output.WriteLine($"Content IDs: [{string.Join(", ", contentIds)}]");
@@ -85,7 +84,7 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
         const string original = "Hello, how are you?";
 
-        var ids = tokenizer.Encode(original, "eng_Latn");
+        var ids = tokenizer.Encode(original, "en");
         var contentIds = ids.Skip(1).SkipLast(1); // exclude lang token and EOS
         var decoded = tokenizer.Decode(contentIds);
 
@@ -118,7 +117,7 @@ public sealed class M2M100TokenizerIntegrationTests(ITestOutputHelper output)
 
         using var tokenizer = new M2M100Tokenizer(ModelPath, configFile: "added_tokens.json");
 
-        var ids = tokenizer.Encode("Hello", "eng_Latn");
+        var ids = tokenizer.Encode("Hello", "en");
         var contentIds = ids[1..^1]; // HF-space BPE IDs (after +spOffset)
 
         var pieces = contentIds.Select(id =>

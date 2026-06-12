@@ -4,3 +4,6 @@
 [submodule "clients/translate-mcp"]
 	path = clients/translate-mcp
 	url = https://github.com/lopatnov/translate-mcp.git
+[submodule "clients/translate-azure-function"]
+	path = clients/translate-azure-function
+	url = https://github.com/lopatnov/translate-azure-function.git

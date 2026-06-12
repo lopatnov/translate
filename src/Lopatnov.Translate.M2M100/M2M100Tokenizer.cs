@@ -19,58 +19,15 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
     private readonly Dictionary<string, long> _isoToTokenId; // ISO 639-1 lang code → token ID
     private readonly HashSet<long> _langTokenIds;             // pre-computed set for Decode filtering
 
-    // Maps FLORES-200 codes (used by ITextTranslator callers) to M2M-100 ISO 639-1/language codes.
-    // Covers all 100 languages supported by M2M-100, plus zho_Hant → zh fallback
-    // (M2M-100 has no separate Traditional Chinese token; zh covers both scripts).
-    private static readonly Dictionary<string, string> FlorestoIso =
+    // M2M-100's native language tokens use ISO 639-1-style codes (__en__, __zh__, …),
+    // which for most languages equal the BCP-47 primary subtag. This map covers only the
+    // BCP-47 tags whose M2M-100 token is NOT simply the primary subtag.
+    private static readonly Dictionary<string, string> Bcp47ToM2MCode =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            // European — Latin
-            ["eng_Latn"] = "en", ["deu_Latn"] = "de", ["fra_Latn"] = "fr",
-            ["spa_Latn"] = "es", ["por_Latn"] = "pt", ["ita_Latn"] = "it",
-            ["nld_Latn"] = "nl", ["pol_Latn"] = "pl", ["ces_Latn"] = "cs",
-            ["ron_Latn"] = "ro", ["hun_Latn"] = "hu", ["swe_Latn"] = "sv",
-            ["dan_Latn"] = "da", ["fin_Latn"] = "fi", ["hrv_Latn"] = "hr",
-            ["slk_Latn"] = "sk", ["slv_Latn"] = "sl", ["lit_Latn"] = "lt",
-            ["lvs_Latn"] = "lv", ["est_Latn"] = "et", ["nob_Latn"] = "no",
-            ["isl_Latn"] = "is", ["ltz_Latn"] = "lb", ["oci_Latn"] = "oc",
-            ["cat_Latn"] = "ca", ["glg_Latn"] = "gl", ["ast_Latn"] = "ast",
-            ["bre_Latn"] = "br", ["cym_Latn"] = "cy", ["gle_Latn"] = "ga",
-            ["gla_Latn"] = "gd", ["als_Latn"] = "sq", ["bos_Latn"] = "bs",
-            ["hat_Latn"] = "ht",
-            // European — Cyrillic / other scripts
-            ["ukr_Cyrl"] = "uk", ["rus_Cyrl"] = "ru", ["bul_Cyrl"] = "bg",
-            ["mkd_Cyrl"] = "mk", ["srp_Cyrl"] = "sr", ["bel_Cyrl"] = "be",
-            ["bak_Cyrl"] = "ba", ["ell_Grek"] = "el", ["ydd_Hebr"] = "yi",
-            // Frisian / other Western European
-            ["fry_Latn"] = "fy",
-            // East Asian
-            ["zho_Hans"] = "zh", ["zho_Hant"] = "zh", // M2M-100 has no separate Traditional Chinese
-            ["jpn_Jpan"] = "ja", ["kor_Hang"] = "ko",
-            // South / Southeast Asian
-            ["hin_Deva"] = "hi", ["ben_Beng"] = "bn", ["mar_Deva"] = "mr",
-            ["npi_Deva"] = "ne", ["guj_Gujr"] = "gu", ["pan_Guru"] = "pa",
-            ["kan_Knda"] = "kn", ["mal_Mlym"] = "ml", ["tam_Taml"] = "ta",
-            ["ory_Orya"] = "or", ["sin_Sinh"] = "si", ["urd_Arab"] = "ur",
-            ["snd_Arab"] = "sd",
-            // Southeast Asian
-            ["tha_Thai"] = "th", ["vie_Latn"] = "vi", ["khm_Khmr"] = "km",
-            ["lao_Laoo"] = "lo", ["mya_Mymr"] = "my", ["ind_Latn"] = "id",
-            ["zsm_Latn"] = "ms", ["tgl_Latn"] = "tl", ["jav_Latn"] = "jv",
-            ["sun_Latn"] = "su", ["ceb_Latn"] = "ceb", ["ilo_Latn"] = "ilo",
-            // Central / West Asian
-            ["tur_Latn"] = "tr", ["azj_Latn"] = "az", ["kaz_Cyrl"] = "kk",
-            ["uzn_Latn"] = "uz", ["khk_Cyrl"] = "mn", ["hye_Armn"] = "hy",
-            ["kat_Geor"] = "ka", ["pes_Arab"] = "fa", ["pbt_Arab"] = "ps",
-            // Middle Eastern / Semitic
-            ["arb_Arab"] = "ar", ["heb_Hebr"] = "he",
-            // African
-            ["afr_Latn"] = "af", ["amh_Ethi"] = "am", ["hau_Latn"] = "ha",
-            ["ibo_Latn"] = "ig", ["yor_Latn"] = "yo", ["swh_Latn"] = "sw",
-            ["som_Latn"] = "so", ["fuv_Latn"] = "ff", ["wol_Latn"] = "wo",
-            ["lug_Latn"] = "lg", ["lin_Latn"] = "ln", ["plt_Latn"] = "mg",
-            ["nso_Latn"] = "ns", ["tsn_Latn"] = "tn", ["ssw_Latn"] = "ss",
-            ["xho_Latn"] = "xh", ["zul_Latn"] = "zu",
+            ["zh-Hans"] = "zh", ["zh-Hant"] = "zh", // M2M-100 has no separate Traditional Chinese
+            ["zh-CN"]   = "zh", ["zh-TW"]   = "zh",
+            ["nb"]      = "no", ["nn"]      = "no", // Norwegian variants → macro code used by M2M-100
         };
 
     public M2M100Tokenizer(string modelDir, string tokenizerFile = "sentencepiece.bpe.model",
@@ -123,15 +80,34 @@ public sealed class M2M100Tokenizer : IM2M100Tokenizer
             .Trim();
     }
 
-    public long GetLanguageTokenId(string languageCode)
+    public long GetLanguageTokenId(string languageCode) =>
+        ResolveLanguageTokenId(languageCode, _isoToTokenId);
+
+    /// <summary>
+    /// Resolves a BCP-47 tag (the system interchange format) to an M2M-100 language
+    /// token ID. Subtags are stripped from the right so the most specific known form
+    /// wins, and the alias map is consulted at every step — e.g. "nb-NO" → "nb" →
+    /// alias "no" → token. The model's native ISO 639-1-style codes match directly
+    /// on the first attempt.
+    /// </summary>
+    internal static long ResolveLanguageTokenId(
+        string languageCode, IReadOnlyDictionary<string, long> tokenIds)
     {
-        // Accept both FLORES-200 (eng_Latn) and ISO 639-1 (en) codes.
-        var isoCode = FlorestoIso.TryGetValue(languageCode, out var iso) ? iso : languageCode;
-        if (_isoToTokenId.TryGetValue(isoCode, out var id))
-            return id;
+        var tag = languageCode;
+        while (true)
+        {
+            var code = Bcp47ToM2MCode.TryGetValue(tag, out var alias) ? alias : tag;
+            if (tokenIds.TryGetValue(code, out var id))
+                return id;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                break;
+            tag = tag[..dash];
+        }
+
         throw new ArgumentException(
             $"Unknown language code: '{languageCode}'. " +
-            "Provide a FLORES-200 code (e.g. 'eng_Latn') or an ISO 639-1 code (e.g. 'en').",
+            "Provide a BCP-47 tag (e.g. 'en') or the model's native ISO 639-1 code.",
             nameof(languageCode));
     }
 

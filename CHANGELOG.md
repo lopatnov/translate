@@ -2,7 +2,35 @@
 
 All notable changes to Lopatnov.Translate are documented here.
 
-## [2.0.0] — Unreleased
+## [Unreleased]
+
+### Changed — BREAKING
+
+**Language codes: BCP-47 is now the only pivot; `language_format` accepts only `bcp47` and `native`**
+
+- `language_format` on all RPCs now accepts **`"bcp47"`** (default) and **`"native"`** only;
+  `"flores200"` and ISO values are rejected with `INVALID_ARGUMENT`
+- FLORES-200 is no longer used as an internal intermediate format anywhere; all
+  conversions pivot through **BCP-47** (`LanguageCodeConverter`)
+- Each model adapter now converts BCP-47 to its own native codes internally:
+  NLLB → FLORES-200, M2M-100 / LibreTranslate → ISO 639-1, Redirect → forwards BCP-47.
+  Unknown codes pass through, so `"native"` callers can address any model in its own vocabulary
+- `ITextTranslator.TranslateAsync` contract: language codes are BCP-47 (model-native codes
+  pass through) — previously FLORES-200
+- Language detectors keep the model's **raw native label** (`"ukr_Cyrl"` from GlotLID v3,
+  `"en"` from LID-176); `language_format: "native"` returns it untouched, BCP-47
+  normalisation happens only on demand (e.g. before translation in auto-detect flows)
+- `HeuristicLanguageDetector` native format is now BCP-47; `Language` constants are BCP-47 tags
+- GlotLID config: `LabelFormat` documented and defaulted as `"iso639-3"` (ISO 639-3 + script,
+  2102 labels in v3)
+
+### Added
+
+- BCP-47 region subtags collapse to the primary subtag automatically (`en-US` → `en`)
+  in the converter and in the M2M-100 / LibreTranslate adapters
+- M2M-100: Norwegian variants `nb` / `nn` now map to the model's `no` token instead of failing
+
+## [3.0.0] — 2026-05-22
 
 ### Added
 

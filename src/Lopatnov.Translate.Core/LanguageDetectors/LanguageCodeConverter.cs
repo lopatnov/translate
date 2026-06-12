@@ -1,14 +1,20 @@
 namespace Lopatnov.Translate.Core.LanguageDetectors;
 
 /// <summary>
-/// Converts language codes between formats: BCP-47, FLORES-200, ISO 639-1/3, and "native" (passthrough).
-/// Default format (empty string) is BCP-47. Unknown codes are passed through as-is.
+/// Converts language codes between formats: BCP-47, FLORES-200, ISO 639-1/2/3, and "native" (passthrough).
+/// <para>
+/// <b>BCP-47 is the internal pivot</b>: every conversion first normalises the input to BCP-47,
+/// then maps from BCP-47 to the target format. FLORES-200 is treated as just another
+/// model-native format (NLLB / GlotLID), never as an intermediate.
+/// </para>
+/// Default format (empty string) is BCP-47. Unknown codes are passed through unchanged,
+/// which lets model-native codes flow through the system untouched.
 /// </summary>
 public static class LanguageCodeConverter
 {
     /// <summary>
     /// Converts <paramref name="code"/> from <paramref name="fromFormat"/> to <paramref name="toFormat"/>.
-    /// Supported format strings: "bcp47" (default when empty), "flores200", "native".
+    /// Supported format strings: "bcp47" (default when empty), "flores200", "iso639-1/2/3", "native".
     /// Unknown codes are returned unchanged.
     /// </summary>
     public static string Convert(string code, string fromFormat, string toFormat) =>
@@ -23,30 +29,87 @@ public static class LanguageCodeConverter
             || toFormat == LanguageCodeFormat.None)
             return code;
 
-        // Normalise to FLORES-200 as the internal pivot.
-        // None/Native → passthrough (no conversion).
-        string flores = fromFormat switch
-        {
-            LanguageCodeFormat.None      => code,
-            LanguageCodeFormat.Flores200 => code,
-            LanguageCodeFormat.ISO639_1  => _bcp47ToFlores200.GetValueOrDefault(code,
-                                                _iso639_3ToFlores200.GetValueOrDefault(code, code)),
-            LanguageCodeFormat.ISO639_2 or
-            LanguageCodeFormat.ISO639_3  => _iso639_3ToFlores200.GetValueOrDefault(code,
-                                                _bcp47ToFlores200.GetValueOrDefault(code, code)),
-            LanguageCodeFormat.Bcp47     => _bcp47ToFlores200.GetValueOrDefault(code, code),
-            _                            => code,
-        };
+        return FromBcp47(ToBcp47(code, fromFormat), toFormat, code);
+    }
 
-        return toFormat switch
+    /// <summary>
+    /// Normalises a code from any source format to BCP-47 (the internal pivot).
+    /// Unknown codes pass through unchanged.
+    /// </summary>
+    public static string ToBcp47(string code, LanguageCodeFormat fromFormat) => fromFormat switch
+    {
+        LanguageCodeFormat.Flores200 => _flores200ToBcp47.GetValueOrDefault(code, code),
+        LanguageCodeFormat.ISO639_1 or
+        LanguageCodeFormat.ISO639_2 or
+        LanguageCodeFormat.ISO639_3 => Iso639ToBcp47(code),
+        _ => code, // Bcp47, Native, None — already the pivot or passthrough
+    };
+
+    // ISO 639-1 two-letter codes are valid BCP-47 primary subtags already and fall
+    // through to passthrough. Three-letter codes resolve via the ISO 639-3 table,
+    // with ISO 639-2/B bibliographic spellings ("ger", "fre", …) as a fallback.
+    // GlotLID v3 labels are ISO 639-3 codes with a script suffix (e.g. "ukr_Cyrl",
+    // 2102 labels) — the FLORES-200 table shares that shape and covers the common
+    // ones; otherwise the bare ISO 639-3 prefix is tried. Unknown codes pass through.
+    private static string Iso639ToBcp47(string code)
+    {
+        if (_iso639_3ToBcp47.TryGetValue(code, out var bcp47))
+            return bcp47;
+        if (_iso639_2BToBcp47.TryGetValue(code, out bcp47))
+            return bcp47;
+        if (_flores200ToBcp47.TryGetValue(code, out bcp47))
+            return bcp47;
+        var underscore = code.IndexOf('_');
+        if (underscore > 0 && _iso639_3ToBcp47.TryGetValue(code[..underscore], out bcp47))
+            return bcp47;
+        return code;
+    }
+
+    private static string FromBcp47(string bcp47, LanguageCodeFormat toFormat, string original) => toFormat switch
+    {
+        LanguageCodeFormat.Bcp47     => bcp47,
+        LanguageCodeFormat.Flores200 => LookupWithPrimarySubtag(_bcp47ToFlores200, bcp47),
+        LanguageCodeFormat.ISO639_1  => ToIso639_1(bcp47),
+        LanguageCodeFormat.ISO639_2 or
+        LanguageCodeFormat.ISO639_3  => LookupWithPrimarySubtag(_bcp47ToIso639_3.Value, bcp47),
+        _                            => original,
+    };
+
+    // Exact match first; then progressively strip subtags from the right so the most
+    // specific known tag wins: "zh-Hant-HK" → "zh-Hant" (Traditional) → "zh", and
+    // "en-US" → "en" → "eng_Latn". Stripping the leftmost subtag instead would turn
+    // "zh-Hant-HK" into "zh" and silently lose the script. Unknown codes pass through.
+    private static string LookupWithPrimarySubtag(IReadOnlyDictionary<string, string> map, string bcp47)
+    {
+        var tag = bcp47;
+        while (true)
         {
-            LanguageCodeFormat.Flores200 => flores,
-            LanguageCodeFormat.Bcp47     => _flores200ToBcp47.GetValueOrDefault(flores, flores),
-            LanguageCodeFormat.ISO639_1  => _flores200ToIso639_1.Value.GetValueOrDefault(flores, flores),
-            LanguageCodeFormat.ISO639_2 or
-            LanguageCodeFormat.ISO639_3  => _flores200ToIso639_3.Value.GetValueOrDefault(flores, flores),
-            _                            => code,
-        };
+            if (map.TryGetValue(tag, out var mapped))
+                return mapped;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                return bcp47;
+            tag = tag[..dash];
+        }
+    }
+
+    private static string ToIso639_1(string bcp47)
+    {
+        // Tags whose ISO 639-1 form is not simply the primary subtag (zh-Hant, yue, …).
+        // Strip subtags from the right so "yue-Hant-HK" still hits the "yue" override.
+        var tag = bcp47;
+        while (true)
+        {
+            if (_bcp47ToIso639_1Overrides.TryGetValue(tag, out var iso))
+                return iso;
+            var dash = tag.LastIndexOf('-');
+            if (dash <= 0)
+                break;
+            tag = tag[..dash];
+        }
+        // "en-US" → "en"; bare 2-letter tags are already ISO 639-1.
+        var first = bcp47.IndexOf('-');
+        return first > 0 ? bcp47[..first] : bcp47;
     }
 
     // Lenient parsing for string-based API: handles hyphen variants, empty → BCP-47, unknown → Native.
@@ -65,7 +128,7 @@ public static class LanguageCodeConverter
         };
 
     // -------------------------------------------------------------------------
-    // Primary mapping: FLORES-200 → BCP-47 (single source of truth)
+    // FLORES-200 ↔ BCP-47 (FLORES side is the NLLB / GlotLID native vocabulary)
     // -------------------------------------------------------------------------
 
     private static readonly Dictionary<string, string> _flores200ToBcp47 =
@@ -120,7 +183,8 @@ public static class LanguageCodeConverter
             ["pan_Guru"] = "pa",
             ["npi_Deva"] = "ne",
             ["sin_Sinh"] = "si",
-            [Language.ChineseSimplified] = "zh-Hans",
+            ["zho_Hans"] = "zh-Hans",
+            ["zho_Hant"] = "zh-Hant",
             ["cmn_Hani"] = "zh-Hans",
             ["yue_Hant"] = "yue",
             ["jpn_Jpan"] = "ja",
@@ -165,139 +229,162 @@ public static class LanguageCodeConverter
             map.TryAdd(bcp47, flores); // first entry wins for duplicate BCP-47 values
 
         // BCP-47 aliases and macro-tags not covered by the simple inverse
-        map["zh"]      = Language.ChineseSimplified; // plain "zh" → Simplified Chinese
-        map["zh-CN"]   = Language.ChineseSimplified;
-        map["zh-Hant"] = "zho_Hant"; // Traditional Chinese (NLLB token, not in forward map)
-        map["zh-TW"]   = "zho_Hant";
-        map["no"]      = "nob_Latn"; // Norwegian macro-tag → Bokmål (ISO 639-1)
+        map["zh"]    = "zho_Hans"; // plain "zh" → Simplified Chinese
+        map["zh-CN"] = "zho_Hans";
+        map["zh-TW"] = "zho_Hant";
+        map["no"]    = "nob_Latn"; // Norwegian macro-tag → Bokmål
         return map;
     }
 
-    // ISO 639-3 → FLORES-200 (3-letter codes from GlotLID / fastText models).
-    // ISO 639-1 (2-letter) lookups are served from _bcp47ToFlores200 instead,
-    // which avoids duplicating FLORES literals in two separate sections.
-    private static readonly Dictionary<string, string> _iso639_3ToFlores200 =
+    // -------------------------------------------------------------------------
+    // ISO 639-3 ↔ BCP-47 (3-letter codes from GlotLID / fastText models)
+    // -------------------------------------------------------------------------
+
+    // ISO 639-1 (2-letter) inputs need no table — they are valid BCP-47 primary subtags.
+    private static readonly Dictionary<string, string> _iso639_3ToBcp47 =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["eng"] = "eng_Latn",
-            ["deu"] = "deu_Latn",
-            ["fra"] = "fra_Latn",
-            ["spa"] = "spa_Latn",
-            ["ita"] = "ita_Latn",
-            ["por"] = "por_Latn",
-            ["nld"] = "nld_Latn",
-            ["pol"] = "pol_Latn",
-            ["ces"] = "ces_Latn",
-            ["slk"] = "slk_Latn",
-            ["slv"] = "slv_Latn",
-            ["hun"] = "hun_Latn",
-            ["ron"] = "ron_Latn",
-            ["bul"] = "bul_Cyrl",
-            ["hrv"] = "hrv_Latn",
-            ["srp"] = "srp_Cyrl",
-            ["rus"] = "rus_Cyrl",
-            ["ukr"] = "ukr_Cyrl",
-            ["bel"] = "bel_Cyrl",
-            ["mkd"] = "mkd_Cyrl",
-            ["bos"] = "bos_Latn",
-            ["lit"] = "lit_Latn",
-            ["lav"] = "lvs_Latn",
-            ["lvs"] = "lvs_Latn",
-            ["est"] = "est_Latn",
-            ["fin"] = "fin_Latn",
-            ["swe"] = "swe_Latn",
-            ["nob"] = "nob_Latn",
-            ["nno"] = "nno_Latn",
-            ["dan"] = "dan_Latn",
-            ["tur"] = "tur_Latn",
-            ["aze"] = "azj_Latn",
-            ["kaz"] = "kaz_Cyrl",
-            ["kir"] = "kir_Cyrl",
-            ["uzb"] = "uzn_Latn",
-            ["tgk"] = "tgk_Cyrl",
-            ["ara"] = "arb_Arab",
-            ["fas"] = "pes_Arab",
-            ["urd"] = "urd_Arab",
-            ["hin"] = "hin_Deva",
-            ["ben"] = "ben_Beng",
-            ["mar"] = "mar_Deva",
-            ["tam"] = "tam_Taml",
-            ["tel"] = "tel_Telu",
-            ["mal"] = "mal_Mlym",
-            ["kan"] = "kan_Knda",
-            ["guj"] = "guj_Gujr",
-            ["pan"] = "pan_Guru",
-            ["nep"] = "npi_Deva",
-            ["npi"] = "npi_Deva",
-            ["sin"] = "sin_Sinh",
-            ["zho"] = Language.ChineseSimplified,
-            ["cmn"] = Language.ChineseSimplified,
-            ["yue"] = "yue_Hant",
-            ["jpn"] = "jpn_Jpan",
-            ["kor"] = "kor_Hang",
-            ["vie"] = "vie_Latn",
-            ["tha"] = "tha_Thai",
-            ["khm"] = "khm_Khmr",
-            ["lao"] = "lao_Laoo",
-            ["mya"] = "mya_Mymr",
-            ["kat"] = "kat_Geor",
-            ["hye"] = "hye_Armn",
-            ["heb"] = "heb_Hebr",
-            ["ind"] = "ind_Latn",
-            ["zsm"] = "zsm_Latn",
-            ["msa"] = "zsm_Latn",
-            ["tgl"] = "tgl_Latn",
-            ["swa"] = "swh_Latn",
-            ["swh"] = "swh_Latn",
-            ["cym"] = "cym_Latn",
-            ["eus"] = "eus_Latn",
-            ["glg"] = "glg_Latn",
-            ["cat"] = "cat_Latn",
-            ["afr"] = "afr_Latn",
-            ["isl"] = "isl_Latn",
-            ["mlt"] = "mlt_Latn",
-            ["sqi"] = "als_Latn",
-            ["khk"] = "khk_Cyrl",
-            ["mon"] = "khk_Cyrl",
-            ["jav"] = "jav_Latn",
-            ["sun"] = "sun_Latn",
-            ["mlg"] = "plt_Latn",
-            ["epo"] = "epo_Latn",
-            ["ell"] = "ell_Grek",
+            ["eng"] = "en",
+            ["deu"] = "de",
+            ["fra"] = "fr",
+            ["spa"] = "es",
+            ["ita"] = "it",
+            ["por"] = "pt",
+            ["nld"] = "nl",
+            ["pol"] = "pl",
+            ["ces"] = "cs",
+            ["slk"] = "sk",
+            ["slv"] = "sl",
+            ["hun"] = "hu",
+            ["ron"] = "ro",
+            ["bul"] = "bg",
+            ["hrv"] = "hr",
+            ["srp"] = "sr",
+            ["rus"] = "ru",
+            ["ukr"] = "uk",
+            ["bel"] = "be",
+            ["mkd"] = "mk",
+            ["bos"] = "bs",
+            ["lit"] = "lt",
+            ["lav"] = "lv",
+            ["lvs"] = "lv",
+            ["est"] = "et",
+            ["fin"] = "fi",
+            ["swe"] = "sv",
+            ["nob"] = "nb",
+            ["nno"] = "nn",
+            ["dan"] = "da",
+            ["tur"] = "tr",
+            ["aze"] = "az",
+            ["kaz"] = "kk",
+            ["kir"] = "ky",
+            ["uzb"] = "uz",
+            ["tgk"] = "tg",
+            ["ara"] = "ar",
+            ["fas"] = "fa",
+            ["urd"] = "ur",
+            ["hin"] = "hi",
+            ["ben"] = "bn",
+            ["mar"] = "mr",
+            ["tam"] = "ta",
+            ["tel"] = "te",
+            ["mal"] = "ml",
+            ["kan"] = "kn",
+            ["guj"] = "gu",
+            ["pan"] = "pa",
+            ["nep"] = "ne",
+            ["npi"] = "ne",
+            ["sin"] = "si",
+            ["zho"] = "zh-Hans",
+            ["cmn"] = "zh-Hans",
+            ["yue"] = "yue",
+            ["jpn"] = "ja",
+            ["kor"] = "ko",
+            ["vie"] = "vi",
+            ["tha"] = "th",
+            ["khm"] = "km",
+            ["lao"] = "lo",
+            ["mya"] = "my",
+            ["kat"] = "ka",
+            ["hye"] = "hy",
+            ["heb"] = "he",
+            ["ind"] = "id",
+            ["zsm"] = "ms",
+            ["msa"] = "ms",
+            ["tgl"] = "tl",
+            ["swa"] = "sw",
+            ["swh"] = "sw",
+            ["cym"] = "cy",
+            ["eus"] = "eu",
+            ["glg"] = "gl",
+            ["cat"] = "ca",
+            ["afr"] = "af",
+            ["isl"] = "is",
+            ["mlt"] = "mt",
+            ["sqi"] = "sq",
+            ["khk"] = "mn",
+            ["mon"] = "mn",
+            ["jav"] = "jv",
+            ["sun"] = "su",
+            ["mlg"] = "mg",
+            ["epo"] = "eo",
+            ["ell"] = "el",
         };
 
-    // FLORES-200 → ISO 639-1: derive from the primary map (BCP-47 2-letter = ISO 639-1 for most languages).
-    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso639_1 = new(() =>
+    // ISO 639-2/B bibliographic spellings that differ from the 639-2/T / 639-3 codes.
+    // Kept in a separate input-only table so they never participate in the
+    // BCP-47 → ISO 639-3 inverse derivation below.
+    private static readonly Dictionary<string, string> _iso639_2BToBcp47 =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ger"] = "de",
+            ["fre"] = "fr",
+            ["dut"] = "nl",
+            ["cze"] = "cs",
+            ["slo"] = "sk",
+            ["rum"] = "ro",
+            ["gre"] = "el",
+            ["alb"] = "sq",
+            ["arm"] = "hy",
+            ["geo"] = "ka",
+            ["per"] = "fa",
+            ["chi"] = "zh-Hans",
+            ["ice"] = "is",
+            ["mac"] = "mk",
+            ["may"] = "ms",
+            ["bur"] = "my",
+            ["wel"] = "cy",
+            ["baq"] = "eu",
+        };
+
+    // BCP-47 → ISO 639-3: invert _iso639_3ToBcp47. Where several ISO codes share one
+    // BCP-47 tag (macro-language vs individual code), prefer the individual code the
+    // models actually use — pinned explicitly for full determinism.
+    private static readonly Lazy<Dictionary<string, string>> _bcp47ToIso639_3 = new(() =>
     {
-        var d = _flores200ToBcp47
-            .Where(kv => kv.Value.Length == 2)
-            .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-        // BCP-47 complex tags (zh-Hans etc.) collapse to the 2-letter ISO 639-1 macro-tag
-        d[Language.ChineseSimplified] = "zh";
-        d["zho_Hant"] = "zh";
-        d["cmn_Hani"] = "zh";
-        d["yue_Hant"] = "zh";
-        return d;
+        var map = _iso639_3ToBcp47
+            .GroupBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).First().Key,
+                StringComparer.OrdinalIgnoreCase);
+
+        // Ambiguous groups: pin the variant used by NLLB / GlotLID vocabularies.
+        map["lv"]      = "lvs"; // Standard Latvian, not the macro code "lav"
+        map["ne"]      = "npi"; // Nepali (individual), not the macro code "nep"
+        map["zh-Hans"] = "zho";
+        map["ms"]      = "zsm"; // Standard Malay, not the macro code "msa"
+        map["sw"]      = "swh"; // Coastal Swahili, not the macro code "swa"
+        map["mn"]      = "khk"; // Halh Mongolian, not the macro code "mon"
+        return map;
     });
 
-    // FLORES-200 → ISO 639-3: invert the 3-letter section of _iso639_3ToFlores200.
-    // When multiple ISO codes share a FLORES target (e.g. "swa"/"swh" → "swh_Latn"),
-    // prefer the code whose first 3 characters match the FLORES prefix (e.g. "swh"),
-    // falling back to alphabetical order for full determinism.
-    private static readonly Lazy<Dictionary<string, string>> _flores200ToIso639_3 = new(() =>
-        _iso639_3ToFlores200
-            .Where(kv => kv.Key.Length == 3)
-            .GroupBy(kv => kv.Value)
-            .ToDictionary(
-                g => g.Key,
-                g =>
-                {
-                    // e.g. "swh" from "swh_Latn"
-                    var prefix = g.Key.Split('_')[0];
-                    return g
-                        .OrderByDescending(kv => kv.Key.Equals(prefix, StringComparison.OrdinalIgnoreCase))
-                        .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-                        .First().Key;
-                },
-                StringComparer.OrdinalIgnoreCase));
+    // BCP-47 tags whose ISO 639-1 form is not simply the primary subtag.
+    private static readonly Dictionary<string, string> _bcp47ToIso639_1Overrides =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zh-Hans"] = "zh",
+            ["zh-Hant"] = "zh",
+            ["zh-CN"]   = "zh",
+            ["zh-TW"]   = "zh",
+            ["yue"]     = "zh", // Cantonese has no ISO 639-1 code; collapse to the macro tag
+        };
 }

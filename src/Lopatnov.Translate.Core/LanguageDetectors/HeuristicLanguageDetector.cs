@@ -54,10 +54,10 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
     public LanguageDetectionResult Detect(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return new LanguageDetectionResult(Language.EnglishLatin, LanguageCodeFormat.Flores200, 1f);
+            return new LanguageDetectionResult(Language.English, LanguageCodeFormat.Bcp47, 1f);
 
         var sample = text.Length > SampleLength ? text.AsSpan(0, SampleLength) : text.AsSpan();
-        return new LanguageDetectionResult(DetectCode(sample), LanguageCodeFormat.Flores200);
+        return new LanguageDetectionResult(DetectCode(sample), LanguageCodeFormat.Bcp47);
     }
 
     private static string DetectCode(ReadOnlySpan<char> sample)
@@ -66,17 +66,17 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
         int kana = sc.Hiragana + sc.Katakana;
 
         if (sc.Cyrillic > 0 && sc.Cyrillic >= sc.Latin && sc.Cyrillic >= sc.Cjk && sc.Cyrillic >= sc.Arabic)
-            return sc.UkSpec > 0 ? Language.UkrainianCyrillic : Language.RussianCyrillic;
+            return sc.UkSpec > 0 ? Language.Ukrainian : Language.Russian;
 
-        if (sc.Hangul > 0) return Language.KoreanHangul;
-        if (sc.Greek > 0 && sc.Greek > sc.Latin / 3) return Language.GreekGrek;
-        if (sc.Hebrew > 0) return Language.HebrewHebr;
+        if (sc.Hangul > 0) return Language.Korean;
+        if (sc.Greek > 0 && sc.Greek > sc.Latin / 3) return Language.Greek;
+        if (sc.Hebrew > 0) return Language.Hebrew;
 
         if (sc.Cjk > sc.Latin) return ResolveCjkLanguage(kana);
-        if (kana > sc.Latin && kana > sc.Cjk) return Language.JapaneseJpan;
-        if (sc.Arabic > sc.Latin) return Language.ArabicArab;
-        if (sc.Devanagari > sc.Latin) return Language.HindiDevanagari;
-        if (sc.Thai > sc.Latin) return Language.ThaiThai;
+        if (kana > sc.Latin && kana > sc.Cjk) return Language.Japanese;
+        if (sc.Arabic > sc.Latin) return Language.Arabic;
+        if (sc.Devanagari > sc.Latin) return Language.Hindi;
+        if (sc.Thai > sc.Latin) return Language.Thai;
 
         return SelectLatinLanguage(in sc.Ls);
     }
@@ -117,25 +117,25 @@ public sealed class HeuristicLanguageDetector : ILanguageDetector
     private static string SelectLatinLanguage(in LatinScores s)
     {
         int max = s.Max();
-        if (max == 0) return Language.EnglishLatin;
+        if (max == 0) return Language.English;
 
         // Ordered by exclusivity of their decisive markers.
-        if (s.Hu == max) return Language.HungarianLatin;  // ő ű — double acute, unique
-        if (s.Ro == max) return Language.RomanianLatin;   // ă ș ț — unique
-        if (s.Cs == max) return Language.CzechLatin;      // ě ř — unique
-        if (s.Pt == max) return Language.PortugueseLatin; // ã õ — unique
-        if (s.Tr == max) return Language.TurkishLatin;    // ş ğ — unique
-        if (s.Sv == max) return Language.SwedishLatin;    // å — unique
-        if (s.Pl == max) return Language.PolishLatin;     // ą ę — unique
-        if (s.De == max) return Language.GermanLatin;     // ß ä ö ü
-        if (s.Fr == max) return Language.FrenchLatin;
-        if (s.It == max) return Language.ItalianLatin;    // ì ò (weak)
-        if (s.Es == max) return Language.SpanishLatin;    // ñ
-        return Language.EnglishLatin;
+        if (s.Hu == max) return Language.Hungarian;  // ő ű — double acute, unique
+        if (s.Ro == max) return Language.Romanian;   // ă ș ț — unique
+        if (s.Cs == max) return Language.Czech;      // ě ř — unique
+        if (s.Pt == max) return Language.Portuguese; // ã õ — unique
+        if (s.Tr == max) return Language.Turkish;    // ş ğ — unique
+        if (s.Sv == max) return Language.Swedish;    // å — unique
+        if (s.Pl == max) return Language.Polish;     // ą ę — unique
+        if (s.De == max) return Language.German;     // ß ä ö ü
+        if (s.Fr == max) return Language.French;
+        if (s.It == max) return Language.Italian;    // ì ò (weak)
+        if (s.Es == max) return Language.Spanish;    // ñ
+        return Language.English;
     }
 
     private static string ResolveCjkLanguage(int kana) =>
-        kana > 0 ? Language.JapaneseJpan : Language.ChineseSimplified;
+        kana > 0 ? Language.Japanese : Language.ChineseSimplified;
 
     private static bool IsUkrainianSpecific(char c) =>
         c is 'і' or 'І' or 'ї' or 'Ї' or 'є' or 'Є' or 'ґ' or 'Ґ';

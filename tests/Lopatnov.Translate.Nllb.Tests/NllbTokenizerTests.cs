@@ -63,12 +63,43 @@ internal sealed class FakeNllbTokenizer : INllbTokenizer
         return new string(chars.ToArray());
     }
 
-    public long GetLanguageTokenId(string languageCode)
-    {
-        if (LangIds.TryGetValue(languageCode, out var id))
-            return id;
-        throw new ArgumentException($"Unknown language code: {languageCode}", nameof(languageCode));
-    }
+    // Delegates to the PRODUCTION resolver so the fake can never diverge from the
+    // real adapter's language-code behaviour (only the token table is faked).
+    public long GetLanguageTokenId(string languageCode) =>
+        NllbTokenizer.ResolveLanguageTokenId(languageCode, LangIds);
 
     public void Dispose() { }
+}
+
+/// <summary>
+/// Direct tests of the production resolver — the exact logic the real tokenizer
+/// uses, exercised without model files via an injected token table.
+/// </summary>
+public sealed class NllbLanguageTokenResolutionTests
+{
+    private static readonly Dictionary<string, long> Tokens = new()
+    {
+        ["eng_Latn"] = 256047L,
+        ["ukr_Cyrl"] = 256188L,
+        ["zho_Hant"] = 256202L,
+    };
+
+    [Theory]
+    [InlineData("en",         256047L)] // BCP-47 → FLORES-200 via the converter
+    [InlineData("en-US",      256047L)] // region subtag collapses
+    [InlineData("eng_Latn",   256047L)] // native FLORES-200 passes through
+    [InlineData("uk",         256188L)]
+    [InlineData("ukr_Cyrl",   256188L)]
+    [InlineData("zh-Hant",    256202L)] // Traditional Chinese script preserved
+    [InlineData("zh-Hant-HK", 256202L)] // most specific known tag wins, script intact
+    public void ResolveLanguageTokenId_ResolvesBcp47AndNativeCodes(string code, long expected)
+    {
+        Assert.Equal(expected, NllbTokenizer.ResolveLanguageTokenId(code, Tokens));
+    }
+
+    [Fact]
+    public void ResolveLanguageTokenId_ThrowsForUnknownCode()
+    {
+        Assert.Throws<ArgumentException>(() => NllbTokenizer.ResolveLanguageTokenId("xx-Unknown", Tokens));
+    }
 }

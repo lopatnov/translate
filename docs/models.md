@@ -57,10 +57,10 @@ Multiple entries of the same type are allowed — just use different names. If `
 
 | Property      | Default       | Description                                                                                                                                                                                   |
 | ------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Path`        | —             | Path to the model file (`.bin` or `.ftz`)                                                                                                                                                     |
-| `LabelFormat` | `"flores200"` | Format of the model's output labels. Use `"iso639-1"` for LID-176 (outputs `__label__en`), `"flores200"` for GlotLID (outputs `__label__eng_Latn`). Also supports `"iso639-2"`, `"iso639-3"`. |
-| `LabelPrefix` | `"__label__"` | Prefix to strip from each label before format conversion.                                                                                                                                     |
-| `LabelSuffix` | `""`          | Optional suffix to strip from each label.                                                                                                                                                     |
+| `Path`        | —             | Path to the model file (`.bin` or `.ftz`)                                                                                                                                                       |
+| `LabelFormat` | `"iso639-3"`  | Format of the model's output labels. Use `"iso639-1"` for LID-176 (outputs `__label__en`), `"iso639-3"` for GlotLID v3 (outputs `__label__eng_Latn` — ISO 639-3 + script, 2102 labels). Labels are kept raw; `language_format: "native"` returns them untouched, BCP-47 conversion happens on demand. |
+| `LabelPrefix` | `"__label__"` | Prefix to strip from each label.                                                                                                                                                                |
+| `LabelSuffix` | `""`          | Optional suffix to strip from each label.                                                                                                                                                       |
 
 **Properties for LibreTranslate:**
 
@@ -217,7 +217,7 @@ HuggingFace repo: [lopatnov/glotlid](https://huggingface.co/lopatnov/glotlid)
   "langdetect": {
     "Type": "FastText",
     "Path": "./models/langdetect/glotlid/model_v3.bin",
-    "LabelFormat": "flores200"  // GlotLID outputs FLORES-200 codes (eng_Latn, ukr_Cyrl, …) — this is the default
+    "LabelFormat": "iso639-3"  // GlotLID v3 labels are ISO 639-3 + script (eng_Latn, ukr_Cyrl, …) — this is the default
   }
 },
 "Translation": {

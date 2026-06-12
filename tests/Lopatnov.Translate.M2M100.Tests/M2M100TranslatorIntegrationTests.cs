@@ -25,11 +25,11 @@ public sealed class M2M100TranslatorIntegrationTests(ITestOutputHelper output)
     // source, srcLang, tgtLang, expected keywords (any one must appear, case-insensitive)
     public static TheoryData<string, string, string, string[]> TranslationCases() => new()
     {
-        { "Привіт, як справи?",            "ukr_Cyrl", "eng_Latn", ["hello", "how are you", "greetings"] },
-        { "Сьогодні гарна погода.",        "ukr_Cyrl", "eng_Latn", ["weather", "today", "nice", "good"] },
-        { "Дякую за вашу допомогу.",       "ukr_Cyrl", "eng_Latn", ["thank", "help"] },
-        { "Добрый день, чем могу помочь?", "rus_Cyrl", "eng_Latn", ["help", "assist", "good", "day"] },
-        { "Спасибо за внимание.",          "rus_Cyrl", "eng_Latn", ["thank", "attention"] },
+        { "Привіт, як справи?",            "uk", "en", ["hello", "how are you", "greetings"] },
+        { "Сьогодні гарна погода.",        "uk", "en", ["weather", "today", "nice", "good"] },
+        { "Дякую за вашу допомогу.",       "uk", "en", ["thank", "help"] },
+        { "Добрый день, чем могу помочь?", "ru", "en", ["help", "assist", "good", "day"] },
+        { "Спасибо за внимание.",          "ru", "en", ["thank", "attention"] },
     };
 
     [Theory]

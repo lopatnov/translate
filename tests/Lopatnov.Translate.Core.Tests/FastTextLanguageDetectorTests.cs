@@ -132,11 +132,12 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn", "fr")]
     [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn", "en")]
     [InlineData("مرحباً بكم في بغداد، عاصمة جمهورية العراق وأكبر مدنها وأعرقها.", "arb_Arab", "ar")]
-    public void Detect_ReturnsExpectedLanguage(string text, string expectedFlores, string expectedBcp47)
+    public void Detect_ReturnsExpectedLanguage(string text, string expectedNative, string expectedBcp47)
     {
         var result = fixture.Detector!.Detect(text);
-        Assert.Equal(expectedFlores, result.NativeCode);
-        Assert.Equal(LanguageCodeFormat.Flores200, result.NativeFormat);
+        // GlotLID v3 native labels are ISO 639-3 + script — preserved untouched.
+        Assert.Equal(expectedNative, result.NativeCode);
+        Assert.Equal(LanguageCodeFormat.ISO639_3, result.NativeFormat);
         Assert.Equal(expectedBcp47, result.Bcp47);
     }
 
@@ -154,7 +155,7 @@ public sealed class FastTextLanguageDetectorIntegrationTests(FastTextDetectorFix
     public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
     {
         var result = fixture.Detector!.Detect(text!);
-        Assert.Equal(Language.EnglishLatin, result.NativeCode);
+        Assert.Equal(Language.English, result.NativeCode);
         Assert.Equal("en", result.Bcp47);
     }
 
@@ -173,29 +174,32 @@ public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture
     : IClassFixture<FastTextLid176Fixture>
 {
     [Lid176Theory]
-    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "deu_Latn", "de")]
-    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fra_Latn", "fr")]
-    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "eng_Latn", "en")]
-    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "rus_Cyrl", "ru")]
-    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "ukr_Cyrl", "uk")]
-    [InlineData("Los investigadores descubrieron nuevas estrellas en galaxias lejanas utilizando un telescopio moderno.", "spa_Latn", "es")]
-    [InlineData("Gli scienziati hanno scoperto nuove stelle in galassie lontane usando un telescopio moderno.", "ita_Latn", "it")]
-    [InlineData("Onderzoekers ontdekten nieuwe sterren in verre sterrenstelsels met behulp van een moderne telescoop.", "nld_Latn", "nl")]
-    public void Detect_ReturnsExpectedLanguage_LongText(string text, string expectedFlores, string expectedBcp47)
+    [InlineData("Das Wetter in Berlin ist heute sehr schön, mit viel Sonnenschein und wenig Wind.", "de")]
+    [InlineData("Le gouvernement français a annoncé de nouvelles mesures économiques pour soutenir les entreprises.", "fr")]
+    [InlineData("Natural language processing enables computers to understand and generate human language effectively.", "en")]
+    [InlineData("Исследователи открыли новые звёзды в далёких галактиках с помощью современного телескопа.", "ru")]
+    [InlineData("Дослідники відкрили нові зорі у далеких галактиках за допомогою сучасного телескопа.", "uk")]
+    [InlineData("Los investigadores descubrieron nuevas estrellas en galaxias lejanas utilizando un telescopio moderno.", "es")]
+    [InlineData("Gli scienziati hanno scoperto nuove stelle in galassie lontane usando un telescopio moderno.", "it")]
+    [InlineData("Onderzoekers ontdekten nieuwe sterren in verre sterrenstelsels met behulp van een moderne telescoop.", "nl")]
+    public void Detect_ReturnsExpectedLanguage_LongText(string text, string expectedIso)
     {
         var result = fixture.Detector!.Detect(text);
-        Assert.Equal(expectedFlores, result.NativeCode);
-        Assert.Equal(expectedBcp47, result.Bcp47);
+        // LID-176 native labels are ISO 639-1 — preserved untouched; for these
+        // languages the BCP-47 form is identical.
+        Assert.Equal(expectedIso, result.NativeCode);
+        Assert.Equal(LanguageCodeFormat.ISO639_1, result.NativeFormat);
+        Assert.Equal(expectedIso, result.Bcp47);
     }
 
     [Lid176Theory]
-    [InlineData("Guten Morgen", "deu_Latn")]
-    [InlineData("Bonjour le monde", "fra_Latn")]
-    [InlineData("Hello world", "eng_Latn")]
-    [InlineData("Привет мир", "rus_Cyrl")]
-    public void Detect_ReturnsExpectedNativeCode_ShortPhrase(string text, string expectedFlores)
+    [InlineData("Guten Morgen", "de")]
+    [InlineData("Bonjour le monde", "fr")]
+    [InlineData("Hello world", "en")]
+    [InlineData("Привет мир", "ru")]
+    public void Detect_ReturnsExpectedNativeCode_ShortPhrase(string text, string expectedIso)
     {
-        Assert.Equal(expectedFlores, fixture.Detector!.Detect(text).NativeCode);
+        Assert.Equal(expectedIso, fixture.Detector!.Detect(text).NativeCode);
     }
 
     [Lid176Theory]
@@ -204,7 +208,7 @@ public sealed class FastTextLid176IntegrationTests(FastTextLid176Fixture fixture
     [InlineData(null!)]
     public void Detect_ReturnsEnglish_ForEmptyOrWhitespace(string? text)
     {
-        Assert.Equal(Language.EnglishLatin, fixture.Detector!.Detect(text!).NativeCode);
+        Assert.Equal(Language.English, fixture.Detector!.Detect(text!).NativeCode);
     }
 
     [Lid176Fact]

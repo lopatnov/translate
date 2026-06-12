@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lopatnov.Translate.Core.LanguageDetectors;
 using Lopatnov.Translate.Nllb.Abstractions;
 using Microsoft.ML.Tokenizers;
 
@@ -49,11 +50,25 @@ public sealed class NllbTokenizer : INllbTokenizer
         return _tokenizer.Decode(filtered) ?? string.Empty;
     }
 
-    public long GetLanguageTokenId(string languageCode)
+    public long GetLanguageTokenId(string languageCode) =>
+        ResolveLanguageTokenId(languageCode, _langTokenIds);
+
+    /// <summary>
+    /// Resolves a BCP-47 tag (the system interchange format) to an NLLB language token ID.
+    /// NLLB's native vocabulary is FLORES-200, so the code is converted first; native
+    /// FLORES-200 codes pass through the converter unchanged.
+    /// </summary>
+    internal static long ResolveLanguageTokenId(
+        string languageCode, IReadOnlyDictionary<string, long> langTokenIds)
     {
-        if (_langTokenIds.TryGetValue(languageCode, out var id))
+        var floresCode = LanguageCodeConverter.Convert(
+            languageCode, LanguageCodeFormat.Bcp47, LanguageCodeFormat.Flores200);
+        if (langTokenIds.TryGetValue(floresCode, out var id))
             return id;
-        throw new ArgumentException($"Unknown FLORES-200 language code: {languageCode}", nameof(languageCode));
+        throw new ArgumentException(
+            $"Unknown language code: '{languageCode}'. " +
+            "Provide a BCP-47 tag (e.g. 'en') or the model's native FLORES-200 code (e.g. 'eng_Latn').",
+            nameof(languageCode));
     }
 
     public void Dispose() { }
