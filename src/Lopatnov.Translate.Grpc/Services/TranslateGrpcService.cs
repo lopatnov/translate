@@ -340,6 +340,12 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
         }
+        catch (Memory.ModelMemoryBudgetException ex)
+        {
+            // Transient by design: idle models are evicted after their TTL, so the
+            // client may retry once memory has been reclaimed.
+            throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
+        }
     }
 
     /// <summary>
