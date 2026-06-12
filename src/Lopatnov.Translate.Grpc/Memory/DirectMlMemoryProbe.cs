@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace Lopatnov.Translate.Grpc.Memory;
@@ -13,6 +14,8 @@ namespace Lopatnov.Translate.Grpc.Memory;
 /// the estimate may be taken from a different adapter than ORT ends up using.
 /// </para>
 /// </summary>
+[ExcludeFromCodeCoverage(Justification =
+    "Requires Windows with DXGI and a hardware GPU — only the degraded path is reachable on CI runners.")]
 public sealed class DirectMlMemoryProbe : IGpuMemoryProbe
 {
     // vtable slots: IUnknown(0-2) + IDXGIObject(3-6) + IDXGIFactory(7-11) + IDXGIFactory1::EnumAdapters1(12)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace Lopatnov.Translate.Grpc.Memory;
@@ -8,6 +9,8 @@ namespace Lopatnov.Translate.Grpc.Memory;
 /// <see cref="NativeLibrary"/> so no NuGet wrapper package is needed, and the probe
 /// degrades to "unknown" (<c>null</c>) on machines without an NVIDIA driver.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification =
+    "Requires an NVIDIA driver (NVML) — only the degraded no-driver path is reachable on CI runners.")]
 public sealed class CudaMemoryProbe : IGpuMemoryProbe
 {
     private const int NvmlSuccess = 0;

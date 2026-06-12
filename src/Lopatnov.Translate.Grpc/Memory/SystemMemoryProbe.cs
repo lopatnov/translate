@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace Lopatnov.Translate.Grpc.Memory;
@@ -80,6 +81,7 @@ public static class SystemMemoryProbe
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx lpBuffer);
 
+    [ExcludeFromCodeCoverage(Justification = "Windows-only P/Invoke path; CI coverage runs on Linux.")]
     private static long? GetWindowsAvailableBytes()
     {
         var status = new MemoryStatusEx { dwLength = (uint)Marshal.SizeOf<MemoryStatusEx>() };

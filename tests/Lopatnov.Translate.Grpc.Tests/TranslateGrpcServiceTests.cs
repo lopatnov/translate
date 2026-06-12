@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Core.LanguageDetectors;
+using Lopatnov.Translate.Grpc.Memory;
 using Lopatnov.Translate.Grpc.Services;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -109,6 +110,32 @@ public sealed class TranslateGrpcServiceTests
             }, ctx.Object));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task TranslateText_ThrowsResourceExhausted_WhenModelLoadIsDeniedByMemoryGate()
+    {
+        // The admission gate rejects a load by throwing from inside the model factory.
+        var manager = new ModelSessionManager(
+            new Dictionary<string, Func<ITextTranslator>>
+            {
+                ["m2m100_1.2B"] = () => throw new ModelMemoryBudgetException("not enough memory"),
+            },
+            allowedModels: [],
+            ttl: TimeSpan.FromMinutes(30));
+
+        var svc = new TranslateGrpcService(manager, NoDetector, NoRecognizer, NoSynthesizer, TranslationOpts());
+        var ctx = new Mock<ServerCallContext>(MockBehavior.Loose);
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            svc.TranslateText(new TranslateTextRequest
+            {
+                Text = "hello", SourceLanguage = "en", TargetLanguage = "uk",
+                Model = "m2m100_1.2B",
+            }, ctx.Object));
+
+        Assert.Equal(StatusCode.ResourceExhausted, ex.StatusCode);
+        Assert.Contains("not enough memory", ex.Status.Detail);
     }
 
     [Theory]
