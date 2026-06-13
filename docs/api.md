@@ -94,12 +94,13 @@ grpcurl -plaintext \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 
-With model-native codes (FLORES-200 for NLLB):
+With model-native codes (FLORES-200 for NLLB — pin `model` to an NLLB entry, since
+FLORES-200 codes are meaningless to non-NLLB models):
 
 ```bash
 grpcurl -plaintext \
   -proto src/Lopatnov.Translate.Grpc/Protos/translate.proto \
-  -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn", "language_format": "native"}' \
+  -d '{"text": "Привіт, як справи?", "source_language": "ukr_Cyrl", "target_language": "eng_Latn", "language_format": "native", "model": "nllb-600M"}' \
   localhost:5100 lopatnov.translate.v1.TranslateService/TranslateText
 ```
 

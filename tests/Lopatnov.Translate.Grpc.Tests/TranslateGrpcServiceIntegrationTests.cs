@@ -73,6 +73,7 @@ public sealed class TranslateGrpcServiceIntegrationTests : IDisposable
             },
             allowedModels: [],
             ttl: TimeSpan.FromMinutes(30));
+        _disposables.Add(manager);
 
         return new TranslateGrpcService(
             manager,

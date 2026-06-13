@@ -1,5 +1,6 @@
 using Lopatnov.Translate.Core.Abstractions;
 using Lopatnov.Translate.Core.LanguageDetectors;
+using Lopatnov.Translate.Grpc.Memory;
 using Lopatnov.Translate.Grpc.Services;
 using Lopatnov.Translate.LibreTranslate;
 using Lopatnov.Translate.M2M100;
@@ -164,7 +165,8 @@ internal static class ModelBootstrap
                 lang, modelKey, modelPath);
 #pragma warning restore CA1873
 
-            SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(pCfg.ExecutionProvider, log);
+            var voiceMemory = BuildOnnxMemoryPolicy(translOpts.MemoryPolicy, [modelPath]);
+            SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(pCfg.ExecutionProvider, voiceMemory, log);
             try
             {
                 voices[lang] = new PiperSynthesizer(
@@ -197,18 +199,29 @@ internal static class ModelBootstrap
         IReadOnlyDictionary<string, ModelConfig> rawModels,
         Func<string, string> resolvePath)
     {
+        var opts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
+
+        // One gate for all ONNX-backed translators: admission against system RAM is
+        // serialised so concurrent first-requests cannot overcommit memory together.
+        var admissionGate = opts.MemoryPolicy.Enabled
+            ? new ModelLoadAdmissionGate(
+                  SystemMemoryProbe.GetAvailableBytes,
+                  sp.GetService<ILoggerFactory>()?.CreateLogger(nameof(ModelLoadAdmissionGate)))
+            : null;
+
         var factories = new Dictionary<string, Func<ITextTranslator>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, cfg) in rawModels)
-            RegisterFactory(factories, name, cfg, sp, resolvePath);
+            RegisterFactory(factories, name, cfg, sp, resolvePath, opts.MemoryPolicy, admissionGate);
 
-        var opts = sp.GetRequiredService<IOptions<TranslationOptions>>().Value;
         return new ModelSessionManager(factories, opts.AllowedModels, TimeSpan.FromMinutes(opts.ModelTtlMinutes));
     }
 
     private static void RegisterFactory(
         Dictionary<string, Func<ITextTranslator>> factories,
         string name, ModelConfig cfg, IServiceProvider sp,
-        Func<string, string> resolvePath)
+        Func<string, string> resolvePath,
+        ModelMemoryPolicyOptions memoryPolicy,
+        ModelLoadAdmissionGate? admissionGate)
     {
         // Whisper, FastText, and Piper are not ITextTranslator — registered elsewhere.
         if (string.Equals(cfg.Type, ModelType.Whisper,  StringComparison.OrdinalIgnoreCase) ||
@@ -224,13 +237,28 @@ internal static class ModelBootstrap
             var c = cfg; var n = name;
             factories[n] = () =>
             {
-                SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, epLogger);
-                return new NllbTranslator(new NllbOptions
+                // Footprint is estimated at load time, not registration time, so model
+                // files downloaded after startup are picked up on the retried load.
+                var memory = BuildOnnxMemoryPolicy(memoryPolicy,
+                    ModelWeightFiles(resolvePath(c.Path), c.EncoderFile, c.DecoderFile));
+                return RunAdmitted(admissionGate, n, memory.RequiredBytes, () =>
                 {
-                    Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                    TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                    MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
-                }, null, null, null, so);
+                    SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, memory, epLogger);
+                    try
+                    {
+                        return new NllbTranslator(new NllbOptions
+                        {
+                            Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                            MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
+                        }, null, null, null, so);
+                    }
+                    catch
+                    {
+                        so.Dispose();
+                        throw;
+                    }
+                });
             };
         }
         else if (string.Equals(cfg.Type, ModelType.M2M100, StringComparison.OrdinalIgnoreCase)
@@ -239,13 +267,26 @@ internal static class ModelBootstrap
             var c = cfg; var n = name;
             factories[n] = () =>
             {
-                SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, epLogger);
-                return new M2M100Translator(new M2M100Options
+                var memory = BuildOnnxMemoryPolicy(memoryPolicy,
+                    ModelWeightFiles(resolvePath(c.Path), c.EncoderFile, c.DecoderFile));
+                return RunAdmitted(admissionGate, n, memory.RequiredBytes, () =>
                 {
-                    Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                    TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                    MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
-                }, null, null, null, so);
+                    SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, memory, epLogger);
+                    try
+                    {
+                        return new M2M100Translator(new M2M100Options
+                        {
+                            Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                            MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
+                        }, null, null, null, so);
+                    }
+                    catch
+                    {
+                        so.Dispose();
+                        throw;
+                    }
+                });
             };
         }
         else if (string.Equals(cfg.Type, ModelType.LibreTranslate, StringComparison.OrdinalIgnoreCase)
@@ -270,4 +311,32 @@ internal static class ModelBootstrap
                 httpAcc);
         }
     }
+
+    // ── Memory policy helpers ─────────────────────────────────────────────────
+
+    private static OnnxMemoryPolicy BuildOnnxMemoryPolicy(
+        ModelMemoryPolicyOptions policy, IEnumerable<string> modelWeightFiles)
+    {
+        if (!policy.Enabled)
+            return OnnxMemoryPolicy.None;
+
+        var fileBytes = ModelFootprintEstimator.EstimateFileBytes(modelWeightFiles);
+        return new OnnxMemoryPolicy
+        {
+            RequiredBytes = ModelFootprintEstimator.ApplyOverhead(fileBytes, policy.OverheadFactor),
+            CudaGpuMemLimitBytes = policy.CudaGpuMemLimitBytes,
+        };
+    }
+
+    private static string[] ModelWeightFiles(string modelDir, params string[] fileNames) =>
+        string.IsNullOrWhiteSpace(modelDir)
+            ? []
+            // Config binding can null out file names despite non-null defaults —
+            // skip them instead of letting Path.Combine throw.
+            : [.. fileNames.Where(f => !string.IsNullOrWhiteSpace(f))
+                           .Select(f => Path.Combine(modelDir, f))];
+
+    private static ITextTranslator RunAdmitted(
+        ModelLoadAdmissionGate? gate, string modelKey, long requiredBytes, Func<ITextTranslator> load) =>
+        gate is null ? load() : gate.Run(modelKey, requiredBytes, load);
 }

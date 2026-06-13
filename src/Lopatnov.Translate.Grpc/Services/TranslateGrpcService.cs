@@ -223,15 +223,18 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
     public override async Task<TranslateAudioResponse> TranslateAudio(
         TranslateAudioRequest request, ServerCallContext context)
     {
-        // The cascade crosses three engines (Whisper → translator → Piper); BCP-47 is the
-        // only format every stage accepts, so "native" here simply means "no conversion".
+        // The cascade crosses three engines (Whisper → translator → Piper); only the
+        // translator accepts model-native codes (unknown codes pass through, per
+        // LanguageCodeConverter). Whisper and Piper require BCP-47, so FLORES-200-shaped
+        // codes (NLLB's native format) are normalised to BCP-47 before those two steps,
+        // regardless of language_format — already-BCP-47 codes pass through unchanged.
         ResolveLanguageFormat(request.LanguageFormat);
 
         // --- Step 1: Speech → Text (Whisper) ---
         var sttLanguage = string.IsNullOrWhiteSpace(request.SourceLanguage) ||
                           request.SourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase)
             ? "auto"
-            : request.SourceLanguage;
+            : LanguageCodeConverter.ToBcp47(request.SourceLanguage, LanguageCodeFormat.Flores200);
 
         Core.Models.TranscriptionResult transcription;
         try
@@ -298,7 +301,7 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         {
             synthesis = await _synthesizer.SynthesizeAsync(
                 translatedText,
-                request.TargetLanguage,
+                LanguageCodeConverter.ToBcp47(request.TargetLanguage, LanguageCodeFormat.Flores200),
                 request.TargetVoice,
                 speed: 1.0f,
                 context.CancellationToken);
@@ -339,6 +342,12 @@ public sealed class TranslateGrpcService : TranslateService.TranslateServiceBase
         catch (UnauthorizedAccessException)
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, $"Provider '{key}' is not allowed."));
+        }
+        catch (Memory.ModelMemoryBudgetException ex)
+        {
+            // Transient by design: idle models are evicted after their TTL, so the
+            // client may retry once memory has been reclaimed.
+            throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
         }
     }
 

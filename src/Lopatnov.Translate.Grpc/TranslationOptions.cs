@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Lopatnov.Translate.Grpc.Memory;
 
 namespace Lopatnov.Translate.Grpc;
 
@@ -29,6 +30,12 @@ public sealed class TranslationOptions
     /// Empty or absent = TTS disabled (SynthesizeSpeech returns FailedPrecondition).
     /// </summary>
     public Dictionary<string, string> TextToAudio { get; set; } = [];
+
+    /// <summary>
+    /// Memory-aware execution-provider selection and model-load admission control.
+    /// See <see cref="ModelMemoryPolicyOptions"/> for the individual knobs.
+    /// </summary>
+    public ModelMemoryPolicyOptions MemoryPolicy { get; set; } = new();
 
     /// <summary>
     /// Names of model entries (keys in the <c>Models</c> section) to warm up at startup.

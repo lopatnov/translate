@@ -29,6 +29,19 @@ All notable changes to Lopatnov.Translate are documented here.
 - BCP-47 region subtags collapse to the primary subtag automatically (`en-US` → `en`)
   in the converter and in the M2M-100 / LibreTranslate adapters
 - M2M-100: Norwegian variants `nb` / `nn` now map to the model's `no` token instead of failing
+- **Memory-aware ONNX execution provider selection**: before loading a model,
+  `Translation:MemoryPolicy` estimates its in-memory footprint from the on-disk weight size
+  and checks free device memory (NVML for CUDA, DXGI for DirectML) before selecting an
+  execution provider. `Models:[key]:ExecutionProvider: "auto"` tries GPU providers in order
+  (Windows: DirectML → CUDA; Linux: CUDA) and falls back to CPU when none has enough free
+  memory; an explicitly-requested GPU provider fails fast with `ModelMemoryBudgetException`
+  instead of risking an OOM crash
+- **Model-load admission gate**: `ModelLoadAdmissionGate` serialises first-load admission
+  against available system RAM so concurrent first requests for different models cannot
+  overcommit memory together; a load that would exceed the budget is rejected with gRPC
+  `RESOURCE_EXHAUSTED` (clients may retry once idle models are evicted by the TTL)
+- `Translation:MemoryPolicy` config section: `Enabled` (default `true`), `OverheadFactor`
+  (default `2.0`), `CudaGpuMemLimitBytes` (default `0` = no cap)
 
 ## [3.0.0] — 2026-05-22
 
