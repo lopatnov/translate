@@ -25,35 +25,45 @@ public static class ModelFootprintEstimator
             if (string.IsNullOrWhiteSpace(path))
                 continue;
 
-            FileInfo file;
+            // Best-effort per path: an I/O or permission failure (unreadable directory,
+            // file deleted mid-scan…) contributes what was readable so far — it must
+            // never surface as an exception that blocks model loading.
             try
             {
-                file = new FileInfo(path);
+                var file = new FileInfo(path);
+                if (!file.Exists || !counted.Add(file.FullName))
+                    continue;
+
+                total += file.Length;
+
+                var directory = file.Directory;
+                if (directory is null)
+                    continue;
+
+                foreach (var companion in directory.EnumerateFiles(file.Name + "*"))
+                {
+                    if (IsExternalDataCompanion(file.Name, companion.Name) &&
+                        counted.Add(companion.FullName))
+                        total += companion.Length;
+                }
             }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException
-                                          or PathTooLongException or System.Security.SecurityException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                          or ArgumentException or NotSupportedException
+                                          or System.Security.SecurityException)
             {
-                continue;
-            }
-
-            if (!file.Exists || !counted.Add(file.FullName))
-                continue;
-
-            total += file.Length;
-
-            var directory = file.Directory;
-            if (directory is null)
-                continue;
-
-            foreach (var companion in directory.EnumerateFiles(file.Name + "*"))
-            {
-                if (counted.Add(companion.FullName))
-                    total += companion.Length;
+                // skip the unreadable path
             }
         }
 
         return total;
     }
+
+    // ONNX external-data conventions only ("model.onnx_data" / "model.onnx.data") —
+    // exact match, so unrelated same-prefix siblings ("model.onnx.bak", "model.onnx.sha256")
+    // never inflate the estimate and wrongly trip the admission gate or skip a GPU.
+    private static bool IsExternalDataCompanion(string modelFileName, string candidateFileName) =>
+        candidateFileName.Equals(modelFileName + "_data", StringComparison.OrdinalIgnoreCase) ||
+        candidateFileName.Equals(modelFileName + ".data", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Applies the activation/workspace overhead factor to a raw file-size estimate.

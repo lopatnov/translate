@@ -315,7 +315,10 @@ internal static class ModelBootstrap
     private static string[] ModelWeightFiles(string modelDir, params string[] fileNames) =>
         string.IsNullOrWhiteSpace(modelDir)
             ? []
-            : Array.ConvertAll(fileNames, f => Path.Combine(modelDir, f));
+            // Config binding can null out file names despite non-null defaults —
+            // skip them instead of letting Path.Combine throw.
+            : [.. fileNames.Where(f => !string.IsNullOrWhiteSpace(f))
+                           .Select(f => Path.Combine(modelDir, f))];
 
     private static ITextTranslator RunAdmitted(
         ModelLoadAdmissionGate? gate, string modelKey, long requiredBytes, Func<ITextTranslator> load) =>
