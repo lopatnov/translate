@@ -90,10 +90,13 @@ public static class OnnxExecutionProviderHelper
         IGpuMemoryProbe directMlProbe,
         ILogger? logger)
     {
-        // Auto-detection priority per platform.
+        // Auto-detection priority per platform. On Windows, DirectML is tried first
+        // (works on any DX12 GPU without a CUDA toolkit install); CUDA is a fallback
+        // for NVIDIA machines where DirectML is unavailable or short on memory.
         (string Display, Action<SessionOptions> Append, IGpuMemoryProbe Probe)[] candidates =
             OperatingSystem.IsWindows()
-                ? [("DirectML", o => o.AppendExecutionProvider_DML(0), directMlProbe)]
+                ? [("DirectML", o => o.AppendExecutionProvider_DML(0), directMlProbe),
+                   ("CUDA",     o => AppendCuda(o, memory.CudaGpuMemLimitBytes, logger), cudaProbe)]
                 : [("CUDA",     o => AppendCuda(o, memory.CudaGpuMemLimitBytes, logger), cudaProbe)];
 
         foreach (var (display, append, probe) in candidates)

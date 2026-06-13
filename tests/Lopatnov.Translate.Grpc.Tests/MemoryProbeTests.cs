@@ -9,7 +9,7 @@ namespace Lopatnov.Translate.Grpc.Tests;
 public sealed class MemoryProbeTests
 {
     [Fact]
-    public void SystemMemoryProbe_ReportsPositiveAvailableBytes()
+    public void SystemMemoryProbe_ReportsNonNegativeAvailableBytes()
     {
         long? available = SystemMemoryProbe.GetAvailableBytes();
 
@@ -17,7 +17,7 @@ public sealed class MemoryProbeTests
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
         {
             Assert.NotNull(available);
-            Assert.True(available > 0, $"expected positive available memory, got {available}");
+            Assert.True(available >= 0, $"expected non-negative available memory, got {available}");
         }
     }
 

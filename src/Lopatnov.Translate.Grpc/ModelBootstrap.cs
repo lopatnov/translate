@@ -244,12 +244,20 @@ internal static class ModelBootstrap
                 return RunAdmitted(admissionGate, n, memory.RequiredBytes, () =>
                 {
                     SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, memory, epLogger);
-                    return new NllbTranslator(new NllbOptions
+                    try
                     {
-                        Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                        TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                        MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
-                    }, null, null, null, so);
+                        return new NllbTranslator(new NllbOptions
+                        {
+                            Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                            MaxTokens = c.MaxTokens, BeamSize = c.BeamSize,
+                        }, null, null, null, so);
+                    }
+                    catch
+                    {
+                        so.Dispose();
+                        throw;
+                    }
                 });
             };
         }
@@ -264,12 +272,20 @@ internal static class ModelBootstrap
                 return RunAdmitted(admissionGate, n, memory.RequiredBytes, () =>
                 {
                     SessionOptions so = OnnxExecutionProviderHelper.BuildSessionOptions(c.ExecutionProvider, memory, epLogger);
-                    return new M2M100Translator(new M2M100Options
+                    try
                     {
-                        Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
-                        TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
-                        MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
-                    }, null, null, null, so);
+                        return new M2M100Translator(new M2M100Options
+                        {
+                            Path = resolvePath(c.Path), EncoderFile = c.EncoderFile, DecoderFile = c.DecoderFile,
+                            TokenizerFile = c.TokenizerFile, TokenizerConfigFile = c.TokenizerConfigFile,
+                            MaxTokens = c.MaxTokens, VocabFile = c.VocabFile,
+                        }, null, null, null, so);
+                    }
+                    catch
+                    {
+                        so.Dispose();
+                        throw;
+                    }
                 });
             };
         }

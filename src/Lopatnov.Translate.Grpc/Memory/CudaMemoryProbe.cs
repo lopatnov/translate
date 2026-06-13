@@ -32,11 +32,14 @@ public sealed class CudaMemoryProbe : IGpuMemoryProbe
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int NvmlDeviceGetMemoryInfoDelegate(IntPtr device, ref NvmlMemory memory);
 
+    private sealed record NvmlBinding(
+        NvmlDeviceGetHandleByIndexDelegate GetHandle,
+        NvmlDeviceGetMemoryInfoDelegate GetMemoryInfo);
+
     // Bound once per process. nvmlInit_v2 is reference-counted inside the driver and NVML
     // stays loaded for the process lifetime, which is what a long-running service wants.
-    private static readonly Lazy<NvmlDeviceGetMemoryInfoDelegate?> BoundMemoryInfo =
+    private static readonly Lazy<NvmlBinding?> Binding =
         new(Bind, LazyThreadSafetyMode.ExecutionAndPublication);
-    private static NvmlDeviceGetHandleByIndexDelegate? _boundGetHandle;
 
     private readonly uint _deviceIndex;
 
@@ -50,16 +53,15 @@ public sealed class CudaMemoryProbe : IGpuMemoryProbe
     {
         try
         {
-            var getMemoryInfo = BoundMemoryInfo.Value;
-            var getHandle = _boundGetHandle;
-            if (getMemoryInfo is null || getHandle is null)
+            var binding = Binding.Value;
+            if (binding is null)
                 return null;
 
-            if (getHandle(_deviceIndex, out var device) != NvmlSuccess)
+            if (binding.GetHandle(_deviceIndex, out var device) != NvmlSuccess)
                 return null;
 
             var memory = default(NvmlMemory);
-            if (getMemoryInfo(device, ref memory) != NvmlSuccess)
+            if (binding.GetMemoryInfo(device, ref memory) != NvmlSuccess)
                 return null;
 
             return memory.Free > long.MaxValue ? long.MaxValue : (long)memory.Free;
@@ -70,7 +72,7 @@ public sealed class CudaMemoryProbe : IGpuMemoryProbe
         }
     }
 
-    private static NvmlDeviceGetMemoryInfoDelegate? Bind()
+    private static NvmlBinding? Bind()
     {
         if (!TryLoadNvml(out var lib))
             return null;
@@ -92,10 +94,7 @@ public sealed class CudaMemoryProbe : IGpuMemoryProbe
             if (init() != NvmlSuccess)
                 return null;
 
-            // Publication-safe: readers only reach _boundGetHandle after BoundMemoryInfo.Value
-            // returns non-null, and Lazy<T> publication establishes the necessary barrier.
-            _boundGetHandle = getHandle;
-            return getMemoryInfo;
+            return new NvmlBinding(getHandle, getMemoryInfo);
         }
         catch
         {
@@ -105,11 +104,13 @@ public sealed class CudaMemoryProbe : IGpuMemoryProbe
 
     private static bool TryLoadNvml(out IntPtr lib)
     {
-        // Windows: System32 since driver R396; the NVSMI folder covers older drivers.
+        // Absolute paths only — a bare "nvml.dll" would search the application
+        // directory first, opening a DLL search-order hijacking vector.
+        // System32 since driver R396; the NVSMI folder covers older drivers.
         string[] candidates = OperatingSystem.IsWindows()
             ?
             [
-                "nvml.dll",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvml.dll"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                              "NVIDIA Corporation", "NVSMI", "nvml.dll"),
             ]
