@@ -38,12 +38,7 @@ public sealed class ModelLoadAdmissionGate(Func<long?> availableBytesProvider, I
             if (available is long a && a < requiredBytes)
             {
                 long availableMb = a >> 20;
-                logger?.LogWarning(
-                    "Refusing to load model '{Model}': estimated footprint {RequiredMb} MB exceeds " +
-                    "available system memory {AvailableMb} MB",
-                    modelKey, requiredMb, availableMb);
-                throw new ModelMemoryBudgetException(
-                    $"Model '{modelKey}' needs an estimated {requiredMb} MB of system memory but only " +
+                logger?.LogWarning($"Model '{modelKey}' needs an estimated {requiredMb} MB of system memory but only " +
                     $"{availableMb} MB is available. Idle models are evicted after " +
                     "Translation:ModelTtlMinutes — retry later, or restrict Translation:AllowedModels.");
             }
