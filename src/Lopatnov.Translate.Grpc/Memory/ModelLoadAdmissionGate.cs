@@ -18,13 +18,10 @@ public sealed class ModelLoadAdmissionGate(Func<long?> availableBytesProvider, I
     private readonly object _gate = new();
 
     /// <summary>
-    /// Runs <paramref name="load"/> if <paramref name="requiredBytes"/> fits into the
-    /// currently available system memory. When availability cannot be determined the
-    /// load is admitted optimistically (legacy behaviour).
+    /// Runs <paramref name="load"/> unconditionally. When <paramref name="requiredBytes"/>
+    /// exceeds available system memory a warning is logged but the load still proceeds.
+    /// When availability cannot be determined the load is admitted optimistically.
     /// </summary>
-    /// <exception cref="ModelMemoryBudgetException">
-    /// The estimated footprint exceeds the available system memory.
-    /// </exception>
     public T Run<T>(string modelKey, long requiredBytes, Func<T> load)
     {
         if (requiredBytes <= 0)
