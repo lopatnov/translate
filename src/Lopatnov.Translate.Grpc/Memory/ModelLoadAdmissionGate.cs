@@ -35,9 +35,10 @@ public sealed class ModelLoadAdmissionGate(Func<long?> availableBytesProvider, I
             if (available is long a && a < requiredBytes)
             {
                 long availableMb = a >> 20;
-                logger?.LogWarning($"Model '{modelKey}' needs an estimated {requiredMb} MB of system memory but only " +
-                    $"{availableMb} MB is available. Idle models are evicted after " +
-                    "Translation:ModelTtlMinutes — retry later, or restrict Translation:AllowedModels.");
+                logger?.LogWarning(
+                    "Model '{ModelKey}' needs an estimated {RequiredMb} MB of system memory but only {AvailableMb} MB is available. " +
+                    "Idle models are evicted after Translation:ModelTtlMinutes — retry later, or restrict Translation:AllowedModels.",
+                    modelKey, requiredMb, availableMb);
             }
 
             long knownAvailableMb = available.HasValue ? available.Value >> 20 : -1;
