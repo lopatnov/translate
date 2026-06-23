@@ -18,13 +18,10 @@ public sealed class ModelLoadAdmissionGate(Func<long?> availableBytesProvider, I
     private readonly object _gate = new();
 
     /// <summary>
-    /// Runs <paramref name="load"/> if <paramref name="requiredBytes"/> fits into the
-    /// currently available system memory. When availability cannot be determined the
-    /// load is admitted optimistically (legacy behaviour).
+    /// Runs <paramref name="load"/> unconditionally. When <paramref name="requiredBytes"/>
+    /// exceeds available system memory a warning is logged but the load still proceeds.
+    /// When availability cannot be determined the load is admitted optimistically.
     /// </summary>
-    /// <exception cref="ModelMemoryBudgetException">
-    /// The estimated footprint exceeds the available system memory.
-    /// </exception>
     public T Run<T>(string modelKey, long requiredBytes, Func<T> load)
     {
         if (requiredBytes <= 0)
@@ -39,13 +36,9 @@ public sealed class ModelLoadAdmissionGate(Func<long?> availableBytesProvider, I
             {
                 long availableMb = a >> 20;
                 logger?.LogWarning(
-                    "Refusing to load model '{Model}': estimated footprint {RequiredMb} MB exceeds " +
-                    "available system memory {AvailableMb} MB",
+                    "Model '{ModelKey}' needs an estimated {RequiredMb} MB of system memory but only {AvailableMb} MB is available. " +
+                    "Idle models are evicted after Translation:ModelTtlMinutes — retry later, or restrict Translation:AllowedModels.",
                     modelKey, requiredMb, availableMb);
-                throw new ModelMemoryBudgetException(
-                    $"Model '{modelKey}' needs an estimated {requiredMb} MB of system memory but only " +
-                    $"{availableMb} MB is available. Idle models are evicted after " +
-                    "Translation:ModelTtlMinutes — retry later, or restrict Translation:AllowedModels.");
             }
 
             long knownAvailableMb = available.HasValue ? available.Value >> 20 : -1;

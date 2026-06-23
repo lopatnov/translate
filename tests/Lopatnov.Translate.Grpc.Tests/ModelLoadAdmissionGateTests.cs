@@ -33,18 +33,15 @@ public sealed class ModelLoadAdmissionGateTests
     }
 
     [Fact]
-    public void InsufficientMemory_Throws_AndNeverInvokesLoad()
+    public void InsufficientMemory_LogsWarning_AndStillInvokesLoad()
     {
         var gate = new ModelLoadAdmissionGate(() => OneGb);
         bool loaded = false;
 
-        var ex = Assert.Throws<ModelMemoryBudgetException>(() =>
-            gate.Run("m2m100_1.2B", requiredBytes: 10 * OneGb, () => loaded = true));
+        var result = gate.Run("m2m100_1.2B", requiredBytes: 10 * OneGb, () => loaded = true);
 
-        Assert.False(loaded);
-        Assert.Contains("m2m100_1.2B", ex.Message);
-        Assert.Contains("10240", ex.Message); // required MB
-        Assert.Contains("1024", ex.Message);  // available MB
+        Assert.True(loaded);
+        Assert.True(result);
     }
 
     [Fact]
